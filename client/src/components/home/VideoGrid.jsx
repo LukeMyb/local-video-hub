@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getImageUrl } from '../../api/jellyfin';
+import { Heart } from 'lucide-react';
 
 export function VideoGrid({ 
   loading, 
@@ -52,6 +53,13 @@ export function VideoGrid({
                 className="w-full aspect-2/3 object-cover bg-zinc-800 transition-opacity group-hover:opacity-90"
                 loading="lazy"
               />
+
+              {/* お気に入りマークの表示 */}
+              {video.UserData?.IsFavorite && (
+                <div className="absolute bottom-1 right-1 p-1 md:p-2 pointer-events-none z-10">
+                  <Heart className="w-5 h-5 md:w-6 md:h-6 fill-white text-white drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]"/>
+                </div>
+              )}
 
               {/* サムネイル下部のタグ表示エリア */}
               {video.Tags && video.Tags.length > 0 && (
