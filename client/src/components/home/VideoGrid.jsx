@@ -60,24 +60,6 @@ export function VideoGrid({
                   <Heart className="w-5 h-5 md:w-6 md:h-6 fill-white text-white drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]"/>
                 </div>
               )}
-
-              {/* サムネイル下部のタグ表示エリア */}
-              {video.Tags && video.Tags.length > 0 && (
-                <div 
-                  className="absolute bottom-0 left-0 right-0 p-1.5 bg-linear-to-t from-black/95 via-black/70 to-transparent flex flex-wrap gap-1 max-h-[20%] overflow-y-auto"
-                  style={{ scrollbarWidth: 'none' }} /* Firefox等でスクロールバーを非表示にする */
-                >
-                  {video.Tags.map(tag => (
-                    <span 
-                      key={tag} 
-                      className="text-[9px] md:text-[10px] text-zinc-300 bg-zinc-900/80 px-1 py-0.5 rounded-sm border border-zinc-700/50 break-all"
-                    >
-                      {/* 表示時はスペースをアンダースコアに変換 */}
-                      {tag.replace(/ /g, '_')}
-                    </span>
-                  ))}
-                </div>
-              )}
             </Link>
           ))}
         </div>
