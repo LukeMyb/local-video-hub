@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getVideoStreamUrl, toggleFavorite } from '../api/jellyfin';
+import { useLocalStorage } from './useLocalStorage';
 
 export function useVideoPlayer(id) {
   const navigate = useNavigate();
@@ -13,7 +14,7 @@ export function useVideoPlayer(id) {
   const containerRef = useRef(null);
   const timeoutRef = useRef(null);
 
-  const [isLoop, setIsLoop] = useState(false);
+  const [isLoop, setIsLoop] = useLocalStorage('jellyfin_isLoop', false);
   const [isMobile, setIsMobile] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
@@ -178,7 +179,7 @@ export function useVideoPlayer(id) {
   // ループ状態のトグル関数
   const toggleLoop = useCallback(() => {
     setIsLoop((prev) => !prev);
-  }, []);
+  }, [setIsLoop]);
 
   return {
     videoRef,
