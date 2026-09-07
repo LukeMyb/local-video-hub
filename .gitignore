@@ -24,5 +24,6 @@ config/*.txt
 bin/
 *.exe
 
-# ダウンロードファイル
+# メディアコンテンツ
 downloads/
+media/
