@@ -15,6 +15,7 @@ Thumbs.db
 # Project Data
 data/
 test/
+logs/
 
 # 認証情報
 config/x.com_cookies.txt

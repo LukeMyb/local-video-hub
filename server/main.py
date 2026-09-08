@@ -1,4 +1,5 @@
 import os
+import logging
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 import yt_dlp
@@ -10,6 +11,26 @@ app = FastAPI(title="Local Video Hub API")
 
 # プロジェクト直下のパスを取得
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+# ログディレクトリの作成とロガーの設定
+LOGS_DIR = os.path.join(os.path.dirname(__file__), "logs")
+os.makedirs(LOGS_DIR, exist_ok=True)
+
+logger = logging.getLogger("download_logger")
+logger.setLevel(logging.INFO)
+
+# ログのフォーマット定義（タイムスタンプ付き）
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+# ファイルへの出力ハンドラ
+file_handler = logging.FileHandler(os.path.join(LOGS_DIR, "download.log"), encoding="utf-8")
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+
+# コンソールへの出力ハンドラ
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
 
 # ダウンロード先のフォルダ
 INBOX_DIR = os.path.join(BASE_DIR, "downloads", "inbox")
@@ -27,7 +48,7 @@ class VideoRequest(BaseModel):
     api_key: str
 
 def download_with_ytdlp(url: str):
-    print(f"\n[{url}] ダウンロードを開始します...")
+    logger.info(f"[{url}] ダウンロードを開始します...")
     
     # オプションを設定
     ydl_opts = {
@@ -52,22 +73,24 @@ def download_with_ytdlp(url: str):
     
     # クッキーファイルが存在しない場合の警告
     if not os.path.exists(COOKIE_FILE):
-        print(f"[警告] クッキーファイルが見つかりません: {COOKIE_FILE}")
+        logger.warning(f"[{url}] クッキーファイルが見つかりません: {COOKIE_FILE}")
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
-        print(f"[{url}] ダウンロードが完了しました！\n")
+        logger.info(f"[{url}] ダウンロードが完了しました！")
     except Exception as e:
-        print(f"[{url}] エラーが発生しました: {e}\n")
+        logger.error(f"[{url}] エラーが発生しました: {e}")
 
 @app.post("/download")
 async def download_video(request: VideoRequest, background_tasks: BackgroundTasks):
     # APIキーの検証 (未設定、または不一致の場合は401エラー)
     if not SECRET_API_KEY or request.api_key != SECRET_API_KEY:
+        # APIキーエラーも追跡できるようにログを残す
+        logger.warning(f"不正なAPIキーでのアクセスを拒否しました: URL={request.url}")
         raise HTTPException(status_code=401, detail="APIキーが間違っています")
 
-    print(f"URLを受け取りました: {request.url}")
+    logger.info(f"URLを受け取りました: {request.url}")
     
     # ダウンロード処理をバックグラウンドタスクとして登録
     background_tasks.add_task(download_with_ytdlp, request.url)
