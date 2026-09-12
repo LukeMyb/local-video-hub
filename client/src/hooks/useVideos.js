@@ -67,12 +67,16 @@ export function useVideos() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [isFavoriteFilter, selectedLibraryId]);
 
-  // 4. スクロール位置の復元（一旦保留にしていた処理）
+  // 4. スクロール位置の復元
   useEffect(() => {
     if (!loading) {
       const saved = sessionStorage.getItem('jellyfin_scrollPosition');
       if (saved) {
-        window.scrollTo({ top: parseInt(saved, 10), behavior: 'instant' });
+        // ブラウザのネイティブなスクロール復元と競合しないよう、
+        // 描画サイクルを少し遅らせてから確実にスクロールさせる
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: parseInt(saved, 10), behavior: 'instant' });
+        });
         sessionStorage.removeItem('jellyfin_scrollPosition');
       }
     }
