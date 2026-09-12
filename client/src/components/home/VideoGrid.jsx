@@ -42,7 +42,13 @@ export function VideoGrid({
             <Link 
               to={`/player/${video.Id}`}
               // 遷移先のプレイヤーにシャッフルや連続再生用のプレイリスト情報を渡す
-              state={{ playlist: allFilteredVideos }}
+              // History APIのサイズ制限(pushState)に引っかからないよう、必要なプロパティのみに軽量化する
+              state={{ 
+                playlist: allFilteredVideos.map(v => ({ 
+                  Id: v.Id, 
+                  UserData: { IsFavorite: v.UserData?.IsFavorite || false } 
+                })) 
+              }}
               key={video.Id} 
               className="relative rounded-md overflow-hidden bg-[#27272a] border border-zinc-800 hover:bg-zinc-700 transition-colors block group"
               onClick={onVideoClick}

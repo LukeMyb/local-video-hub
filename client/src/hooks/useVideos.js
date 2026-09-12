@@ -215,7 +215,13 @@ export function useVideos() {
       return newArray;
     };
     
-    const shuffledPlaylist = shuffleArray(allFiltered);
+    // History APIのサイズ制限対策として、Idとお気に入り情報だけを残した軽量オブジェクトに変換
+    const lightweightPlaylist = allFiltered.map(v => ({
+      Id: v.Id,
+      UserData: { IsFavorite: v.UserData?.IsFavorite || false }
+    }));
+    
+    const shuffledPlaylist = shuffleArray(lightweightPlaylist);
     const randomVideo = shuffledPlaylist[0];
     
     navigate(`/player/${randomVideo.Id}`, { state: { playlist: shuffledPlaylist } });
