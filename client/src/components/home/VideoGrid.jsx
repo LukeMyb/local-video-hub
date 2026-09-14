@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getImageUrl } from '../../api/jellyfin';
 import { Heart } from 'lucide-react';
+import { useGridColumns } from '../../hooks/useGridColumns';
 
 export function VideoGrid({ 
   loading, 
@@ -12,6 +13,9 @@ export function VideoGrid({
 }) {
   // 無限スクロールの監視対象となるDOMの参照
   const observerTarget = useRef(null);
+  
+  // ピンチやホイールによる動的な列数の取得
+  const columns = useGridColumns();
 
   // IntersectionObserverを用いて、ページ最下部付近に到達したことを検知する
   useEffect(() => {
@@ -37,7 +41,10 @@ export function VideoGrid({
       {loading ? (
         <p className="text-zinc-500 text-center mt-8 text-sm">読み込み中...</p>
       ) : (
-        <div className="grid grid-cols-3 md:grid-cols-6 landscape:grid-cols-6 gap-2 lg:gap-4">
+        <div 
+          className="grid gap-2 lg:gap-4" 
+          style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+        >
           {displayedVideos.map((video) => (
             <Link 
               to={`/player/${video.Id}`}
@@ -71,8 +78,10 @@ export function VideoGrid({
         </div>
       )}
 
-      {/* 無限スクロールの検知用見えないブロック */}
-      <div ref={observerTarget} className="h-20" />
+      {/* 無限スクロールの検知用見えないブロック（全て表示しきった場合は非表示） */}
+      {displayedVideos.length < allFilteredVideos.length && (
+        <div ref={observerTarget} className="h-20" />
+      )}
     </div>
   );
 }

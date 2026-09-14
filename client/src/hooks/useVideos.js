@@ -191,11 +191,14 @@ export function useVideos() {
 
   const handleLoadMore = useCallback(() => {
     setDisplayCount((prev) => {
+      // すべて表示済みの場合は増やさない
+      if (allFiltered && prev >= allFiltered.length) return prev;
+      
       const newCount = prev + 100;
       sessionStorage.setItem('jellyfin_displayCount', newCount.toString());
       return newCount;
     });
-  }, []);
+  }, [allFiltered]);
 
   const handleVideoClick = useCallback(() => {
     const currentScrollY = window.scrollY;
