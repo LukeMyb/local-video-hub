@@ -72,11 +72,11 @@ export function useVideos() {
     if (!loading) {
       const saved = sessionStorage.getItem('jellyfin_scrollPosition');
       if (saved) {
-        // ブラウザのネイティブなスクロール復元と競合しないよう、
-        // 描画サイクルを少し遅らせてから確実にスクロールさせる
-        requestAnimationFrame(() => {
+        // VirtuosoGridがアイテムサイズを測定し、全体の高さをDOMに展開するまでには
+        // スマホ等の環境だと数フレーム（数十ミリ秒）かかるため、少し待ってからスクロールする
+        setTimeout(() => {
           window.scrollTo({ top: parseInt(saved, 10), behavior: 'instant' });
-        });
+        }, 100);
         sessionStorage.removeItem('jellyfin_scrollPosition');
       }
     }
