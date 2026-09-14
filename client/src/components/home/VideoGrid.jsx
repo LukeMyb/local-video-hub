@@ -6,6 +6,32 @@ import { useGridColumns } from '../../hooks/useGridColumns';
 import { VirtuosoGrid } from 'react-virtuoso';
 import React from 'react';
 
+// VirtuosoGridに渡すためのカスタムコンポーネント（再生成を防ぐためコンポーネント外に静的に定義）
+const gridComponents = {
+  // 全体を囲むグリッドコンテナ
+  List: React.forwardRef(({ style, children, ...props }, ref) => (
+    <div
+      ref={ref}
+      {...props}
+      style={{
+        ...style,
+        display: 'grid',
+        // CSS変数を使って列数を動的に受け取る
+        gridTemplateColumns: 'repeat(var(--grid-columns, 6), minmax(0, 1fr))',
+      }}
+      className="gap-2 lg:gap-4"
+    >
+      {children}
+    </div>
+  )),
+  // 個々のアイテムのラッパー
+  Item: ({ children, ...props }) => (
+    <div {...props} className="flex w-full">
+      {children}
+    </div>
+  )
+};
+
 export function VideoGrid({ 
   loading, 
   allFilteredVideos, 
@@ -13,33 +39,9 @@ export function VideoGrid({
 }) {
   const columns = useGridColumns();
 
-  // VirtuosoGridに渡すためのカスタムコンポーネント
-  const gridComponents = useMemo(() => ({
-    // 全体を囲むグリッドコンテナ
-    List: React.forwardRef(({ style, children, ...props }, ref) => (
-      <div
-        ref={ref}
-        {...props}
-        style={{
-          ...style,
-          display: 'grid',
-          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-        }}
-        className="gap-2 lg:gap-4"
-      >
-        {children}
-      </div>
-    )),
-    // 個々のアイテムのラッパー
-    Item: ({ children, ...props }) => (
-      <div {...props} className="flex">
-        {children}
-      </div>
-    )
-  }), [columns]);
-
   return (
-    <div className="p-2 md:p-4 pt-0 flex-1 w-full">
+    // 親要素のstyleにCSS変数として現在の列数を渡す
+    <div className="p-2 md:p-4 pt-0 flex-1 w-full" style={{ '--grid-columns': columns }}>
       {loading ? (
         <p className="text-zinc-500 text-center mt-8 text-sm">読み込み中...</p>
       ) : (
