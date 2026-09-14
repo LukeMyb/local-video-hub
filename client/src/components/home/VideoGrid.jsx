@@ -70,7 +70,7 @@ export function VideoGrid({
                 <img
                   src={getImageUrl(video.Id)}
                   alt={video.Name}
-                  className="w-full aspect-[2/3] object-cover bg-zinc-800 transition-opacity group-hover:opacity-90"
+                  className="w-full aspect-2/3 object-cover bg-zinc-800 transition-opacity group-hover:opacity-90"
                   loading="lazy"
                 />
 
