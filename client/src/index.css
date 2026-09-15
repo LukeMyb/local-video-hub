@@ -1,6 +1,24 @@
 @import "tailwindcss";
 
-/* ブラウザ標準のスワイプナビゲーション（戻る/進む）を無効化 */
+/* ブラウザ標準のスワイプナビゲーション（戻る・進む）を無効化 */
 html, body {
   overscroll-behavior-x: none;
+  overflow-y: scroll; /* スクロールバーの有無による横幅の変化（ガタつきループ）を防止 */
+  color-scheme: dark; /* スクロールバーをダークテーマ（黒）に合わせる */
+}
+
+/* PC向け カスタムスクロールバー（Webkit） */
+::-webkit-scrollbar {
+  width: 14px;
+}
+::-webkit-scrollbar-track {
+  background: #18181b; /* zinc-900系の背景に合わせる */
+}
+::-webkit-scrollbar-thumb {
+  background-color: #3f3f46; /* zinc-700 */
+  border-radius: 10px;
+  border: 3px solid #18181b;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: #52525b; /* zinc-600 */
 }
