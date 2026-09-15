@@ -14,6 +14,7 @@ export function useVideos() {
   const [isFavoriteFilter, setIsFavoriteFilter] = useLocalStorage('jellyfin_isFavorite', false);
   const [selectedLibraryId, setSelectedLibraryId] = useLocalStorage('jellyfin_libraryId', null);
   const [sortOrder, setSortOrder] = useLocalStorage('jellyfin_sortOrder', 'desc');
+  const [libraryHistory, setLibraryHistory] = useLocalStorage('jellyfin_libraryHistory', []);
 
   // UIの状態
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -27,6 +28,38 @@ export function useVideos() {
 
   const isFirstMountForFilter = useRef(true);
   const scrollToTopBtnRef = useRef(null);
+
+  // ライブラリの履歴を更新する関数
+  const handleSelectLibrary = useCallback((id) => {
+    setSelectedLibraryId(id);
+    if (id !== null) {
+      setLibraryHistory(prev => {
+        const history = Array.isArray(prev) ? prev : [];
+        const newHistory = history.filter(item => item !== id);
+        newHistory.unshift(id);
+        return newHistory;
+      });
+    }
+  }, [setSelectedLibraryId, setLibraryHistory]);
+
+  // 履歴順にソートされたライブラリ
+  const sortedLibraries = useMemo(() => {
+    if (!libraries || libraries.length === 0) return [];
+    
+    return [...libraries].sort((a, b) => {
+      const history = Array.isArray(libraryHistory) ? libraryHistory : [];
+      const indexA = history.indexOf(a.Id);
+      const indexB = history.indexOf(b.Id);
+      
+      if (indexA !== -1 && indexB !== -1) {
+        return indexA - indexB;
+      }
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      
+      return (a.Name || '').localeCompare(b.Name || '');
+    });
+  }, [libraries, libraryHistory]);
 
   // 1. 初回マウント時にライブラリ一覧を取得
   useEffect(() => {
@@ -234,9 +267,9 @@ export function useVideos() {
   // Componentで必要なStateや関数を全て返す
   return {
     loading,
-    libraries,
+    libraries: sortedLibraries,
     selectedLibraryId,
-    setSelectedLibraryId,
+    setSelectedLibraryId: handleSelectLibrary,
     isDrawerOpen,
     setIsDrawerOpen,
     searchQuery,
