@@ -102,3 +102,105 @@ async def download_video(request: VideoRequest, background_tasks: BackgroundTask
         "url": request.url,
         "save_dir": INBOX_DIR
     }
+
+MEDIA_DIR = os.path.join(BASE_DIR, "media")
+TRASH_DIR = os.path.join(MEDIA_DIR, "trash")
+
+class TrashRestoreRequest(BaseModel):
+    video_path: str
+    api_key: str
+
+import shutil
+from pathlib import Path
+
+def get_related_files(video_path: str):
+    """Find related files like .nfo, .jpg, .srt that share the same base name."""
+    video_path_obj = Path(video_path)
+    if not video_path_obj.exists():
+        return []
+    
+    parent_dir = video_path_obj.parent
+    base_name = video_path_obj.stem
+    
+    related_files = []
+    for f in parent_dir.iterdir():
+        if f.is_file():
+            # base_name と一致するファイル群 (拡張子違い、または -xxx のサフィックス)
+            if f.name.startswith(base_name + ".") or f.name.startswith(base_name + "-"):
+                related_files.append(f)
+    
+    return related_files
+
+@app.post("/api/videos/trash")
+async def trash_video(request: TrashRestoreRequest):
+    if not SECRET_API_KEY or request.api_key != SECRET_API_KEY:
+        raise HTTPException(status_code=401, detail="APIキーが間違っています")
+
+    video_path = os.path.normpath(request.video_path)
+    
+    # 存在確認
+    if not os.path.exists(video_path):
+        raise HTTPException(status_code=404, detail="ファイルが見つかりません")
+        
+    # パスがmediaディレクトリ以下か確認
+    if not video_path.startswith(os.path.normpath(MEDIA_DIR)):
+        raise HTTPException(status_code=400, detail="対象ファイルがメディアディレクトリ外です")
+        
+    # 既にtrash以下にいるか確認
+    if video_path.startswith(os.path.normpath(TRASH_DIR)):
+        raise HTTPException(status_code=400, detail="既にゴミ箱に移動されています")
+
+    # mediaディレクトリからの相対パスを取得
+    rel_path = os.path.relpath(video_path, MEDIA_DIR)
+    
+    # 移動先パス
+    target_path = os.path.join(TRASH_DIR, rel_path)
+    target_dir = os.path.dirname(target_path)
+    
+    # ゴミ箱内にディレクトリを作成
+    os.makedirs(target_dir, exist_ok=True)
+    
+    # 関連ファイルを探して移動
+    related_files = get_related_files(video_path)
+    for f in related_files:
+        src_file = str(f)
+        dst_file = os.path.join(target_dir, f.name)
+        shutil.move(src_file, dst_file)
+        logger.info(f"Moved to trash: {src_file} -> {dst_file}")
+        
+    return {"status": "success", "message": "ファイルをゴミ箱に移動しました", "target": target_path}
+
+@app.post("/api/videos/restore")
+async def restore_video(request: TrashRestoreRequest):
+    if not SECRET_API_KEY or request.api_key != SECRET_API_KEY:
+        raise HTTPException(status_code=401, detail="APIキーが間違っています")
+
+    video_path = os.path.normpath(request.video_path)
+    
+    # 存在確認
+    if not os.path.exists(video_path):
+        raise HTTPException(status_code=404, detail="ファイルが見つかりません")
+        
+    # パスがtrashディレクトリ以下か確認
+    if not video_path.startswith(os.path.normpath(TRASH_DIR)):
+        raise HTTPException(status_code=400, detail="対象ファイルはゴミ箱にありません")
+
+    # trashディレクトリからの相対パスを取得
+    rel_path = os.path.relpath(video_path, TRASH_DIR)
+    
+    # 移動先パス (元のmedia以下)
+    target_path = os.path.join(MEDIA_DIR, rel_path)
+    target_dir = os.path.dirname(target_path)
+    
+    # 元のディレクトリを作成
+    os.makedirs(target_dir, exist_ok=True)
+    
+    # 関連ファイルを探して移動
+    related_files = get_related_files(video_path)
+    for f in related_files:
+        src_file = str(f)
+        dst_file = os.path.join(target_dir, f.name)
+        shutil.move(src_file, dst_file)
+        logger.info(f"Restored from trash: {src_file} -> {dst_file}")
+        
+    return {"status": "success", "message": "ファイルを元の場所に復元しました", "target": target_path}
