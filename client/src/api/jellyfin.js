@@ -108,3 +108,21 @@ export const toggleFavorite = async (videoId, currentIsFavorite) => {
   const data = await response.json();
   return data.IsFavorite; 
 };
+
+// ライブラリの全体スキャン（更新）を強制的にトリガーする
+export const refreshLibrary = async () => {
+  if (!API_KEY) {
+    throw new Error('APIキーが設定されていません');
+  }
+
+  const url = new URL(`${API_URL}/Library/Refresh`);
+  url.searchParams.append('api_key', API_KEY);
+
+  const response = await fetch(url.toString(), {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    throw new Error('ライブラリのスキャン要求に失敗しました');
+  }
+};

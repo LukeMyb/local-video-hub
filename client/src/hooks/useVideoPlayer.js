@@ -73,7 +73,12 @@ export function useVideoPlayer(id) {
     
     try {
       const { trashVideo } = await import('../api/backend');
+      const { refreshLibrary } = await import('../api/jellyfin');
       await trashVideo(fullVideoInfo.Path);
+      
+      // 移動完了後、Jellyfinにライブラリスキャンを要求
+      await refreshLibrary().catch(e => console.error(e));
+      
       alert('ゴミ箱に移動しました。');
       navigate('/');
     } catch (error) {
@@ -88,7 +93,12 @@ export function useVideoPlayer(id) {
     
     try {
       const { restoreVideo } = await import('../api/backend');
+      const { refreshLibrary } = await import('../api/jellyfin');
       await restoreVideo(fullVideoInfo.Path);
+      
+      // 復元完了後、Jellyfinにライブラリスキャンを要求
+      await refreshLibrary().catch(e => console.error(e));
+      
       alert('復元しました。');
       navigate('/');
     } catch (error) {
