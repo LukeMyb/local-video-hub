@@ -86,17 +86,15 @@ export function useVideoPlayer(id) {
       await refreshLibrary().catch(e => console.error(e));
       
       hideVideoLocally();
+      // ホーム画面での動画再取得を1.5秒遅延させるフラグを立てる
+      sessionStorage.setItem('jellyfin_delay_fetch', 'true');
       alert('ゴミ箱に移動しました。');
-      
-      // Jellyfin側のスキャン＆DB登録が間に合うように少しだけ待機
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      // フルリロードしてホームに戻る
-      window.location.href = '/';
+      navigate('/');
     } catch (error) {
       console.error(error);
       alert(`エラー: ${error.message}`);
     }
-  }, [fullVideoInfo, hideVideoLocally]);
+  }, [fullVideoInfo, hideVideoLocally, navigate]);
 
   const handleRestoreVideo = useCallback(async () => {
     if (!fullVideoInfo?.Path) return;
@@ -111,17 +109,15 @@ export function useVideoPlayer(id) {
       await refreshLibrary().catch(e => console.error(e));
       
       hideVideoLocally();
+      // ホーム画面での動画再取得を1.5秒遅延させるフラグを立てる
+      sessionStorage.setItem('jellyfin_delay_fetch', 'true');
       alert('復元しました。');
-      
-      // Jellyfin側のスキャン＆DB登録が間に合うように少しだけ待機
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      // フルリロードしてホームに戻る
-      window.location.href = '/';
+      navigate('/');
     } catch (error) {
       console.error(error);
       alert(`エラー: ${error.message}`);
     }
-  }, [fullVideoInfo, hideVideoLocally]);
+  }, [fullVideoInfo, hideVideoLocally, navigate]);
 
   // --- コントロールバーの表示制御 ---
   const resetControlsTimeout = useCallback(() => {

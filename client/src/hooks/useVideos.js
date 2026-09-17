@@ -79,6 +79,13 @@ export function useVideos() {
   useEffect(() => {
     const fetchVideos = async () => {
       setLoading(true);
+      
+      // プレイヤーから移動・復元して戻ってきた直後の場合、JellyfinのDB登録を待つため少し遅延させる
+      if (sessionStorage.getItem('jellyfin_delay_fetch')) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        sessionStorage.removeItem('jellyfin_delay_fetch');
+      }
+
       try {
         const data = await getVideos(selectedLibraryId);
         setVideos(data.Items || []);
