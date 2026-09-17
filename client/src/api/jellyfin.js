@@ -10,8 +10,8 @@ export const getVideos = async (libraryId = null) => {
   url.searchParams.append('IncludeItemTypes', 'Movie,Episode,Video');
   // フォルダ階層を無視してすべてのアイテムをフラットに取得する
   url.searchParams.append('Recursive', 'true');
-  // ソート用にDateCreated(追加日時)を取得する
-  url.searchParams.append('Fields', 'DateCreated,Tags');
+  // ソート用にDateCreated(追加日時)などを取得する
+  url.searchParams.append('Fields', 'DateCreated,Tags,ImageTags');
 
   // ユーザーIDをパラメータに付与して、お気に入りデータ等を含める
   if (USER_ID) {
@@ -73,9 +73,11 @@ export const getVideoInfo = async (itemId) => {
   return await res.json();
 };
 
-export const getImageUrl = (itemId) => {
+export const getImageUrl = (video) => {
   // サムネイル画像用のURLを構築
-  return `${API_URL}/Items/${itemId}/Images/Primary?fillHeight=300&fillWidth=200&quality=90`;
+  const tag = video.ImageTags?.Primary;
+  const tagParam = tag ? `&tag=${tag}` : '';
+  return `${API_URL}/Items/${video.Id}/Images/Primary?fillHeight=300&fillWidth=200&quality=90${tagParam}`;
 };
 
 export const getVideoStreamUrl = (itemId) => {

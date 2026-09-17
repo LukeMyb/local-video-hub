@@ -68,10 +68,16 @@ export function VideoGrid({
                 onClick={onVideoClick}
               >
                 <img
-                  src={getImageUrl(video.Id)}
+                  src={getImageUrl(video)}
                   alt={video.Name}
                   className="w-full aspect-2/3 object-cover bg-zinc-800 transition-opacity group-hover:opacity-90"
                   loading="lazy"
+                  onError={(e) => {
+                    // サムネ生成前の404エラー時は、プレースホルダーとしてグレー背景にする
+                    e.target.style.display = 'none';
+                    e.target.parentElement.classList.add('flex', 'items-center', 'justify-center', 'bg-zinc-800');
+                    e.target.parentElement.innerHTML = '<span class="text-zinc-500 text-sm">Processing...</span>';
+                  }}
                 />
 
                 {video.UserData?.IsFavorite && (

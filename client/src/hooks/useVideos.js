@@ -32,6 +32,7 @@ export function useVideos() {
   // ライブラリの履歴を更新する関数
   const handleSelectLibrary = useCallback((id) => {
     setSelectedLibraryId(id);
+    sessionStorage.removeItem('jellyfin_hidden_ids'); // ライブラリ切り替え時に非表示リストをリセット
     if (id !== null) {
       setLibraryHistory(prev => {
         const history = Array.isArray(prev) ? prev : [];

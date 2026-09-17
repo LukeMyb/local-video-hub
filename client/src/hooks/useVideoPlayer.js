@@ -87,6 +87,9 @@ export function useVideoPlayer(id) {
       
       hideVideoLocally();
       alert('ゴミ箱に移動しました。');
+      
+      // Jellyfin側のスキャン＆DB登録が間に合うように少しだけ待機
+      await new Promise(resolve => setTimeout(resolve, 1500));
       // フルリロードしてホームに戻る
       window.location.href = '/';
     } catch (error) {
@@ -109,6 +112,9 @@ export function useVideoPlayer(id) {
       
       hideVideoLocally();
       alert('復元しました。');
+      
+      // Jellyfin側のスキャン＆DB登録が間に合うように少しだけ待機
+      await new Promise(resolve => setTimeout(resolve, 1500));
       // フルリロードしてホームに戻る
       window.location.href = '/';
     } catch (error) {
