@@ -67,6 +67,12 @@ export function useVideoPlayer(id) {
 
   const isTrashed = fullVideoInfo?.Path?.includes('/trash/') || fullVideoInfo?.Path?.includes('\\trash\\');
 
+  const hideVideoLocally = useCallback(() => {
+    const hidden = JSON.parse(sessionStorage.getItem('jellyfin_hidden_ids') || '{}');
+    hidden[id] = Date.now();
+    sessionStorage.setItem('jellyfin_hidden_ids', JSON.stringify(hidden));
+  }, [id]);
+
   const handleTrashVideo = useCallback(async () => {
     if (!fullVideoInfo?.Path) return;
     if (!window.confirm('この動画をゴミ箱に移動しますか？')) return;
@@ -79,13 +85,15 @@ export function useVideoPlayer(id) {
       // 移動完了後、Jellyfinにライブラリスキャンを要求
       await refreshLibrary().catch(e => console.error(e));
       
+      hideVideoLocally();
       alert('ゴミ箱に移動しました。');
-      navigate('/');
+      // フルリロードしてホームに戻る
+      window.location.href = '/';
     } catch (error) {
       console.error(error);
       alert(`エラー: ${error.message}`);
     }
-  }, [fullVideoInfo, navigate]);
+  }, [fullVideoInfo, hideVideoLocally]);
 
   const handleRestoreVideo = useCallback(async () => {
     if (!fullVideoInfo?.Path) return;
@@ -99,13 +107,15 @@ export function useVideoPlayer(id) {
       // 復元完了後、Jellyfinにライブラリスキャンを要求
       await refreshLibrary().catch(e => console.error(e));
       
+      hideVideoLocally();
       alert('復元しました。');
-      navigate('/');
+      // フルリロードしてホームに戻る
+      window.location.href = '/';
     } catch (error) {
       console.error(error);
       alert(`エラー: ${error.message}`);
     }
-  }, [fullVideoInfo, navigate]);
+  }, [fullVideoInfo, hideVideoLocally]);
 
   // --- コントロールバーの表示制御 ---
   const resetControlsTimeout = useCallback(() => {

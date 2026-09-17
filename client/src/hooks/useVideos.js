@@ -178,6 +178,16 @@ export function useVideos() {
     if (!videos) return { allFiltered: [], displayed: [] };
     
     let filtered = [...videos];
+
+    // 直近で論理削除/復元した動画を一時的に非表示にする（15秒間）
+    const hiddenMap = JSON.parse(sessionStorage.getItem('jellyfin_hidden_ids') || '{}');
+    const now = Date.now();
+    filtered = filtered.filter(video => {
+      const hiddenTime = hiddenMap[video.Id];
+      // 15000ミリ秒（15秒）以内なら非表示
+      if (hiddenTime && now - hiddenTime < 15000) return false;
+      return true;
+    });
     
     if (isFavoriteFilter) {
       filtered = filtered.filter(video => video.UserData?.IsFavorite);
