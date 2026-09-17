@@ -1,6 +1,7 @@
 import os
 import logging
 from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import yt_dlp
 from dotenv import load_dotenv
@@ -8,6 +9,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = FastAPI(title="Local Video Hub API")
+
+# CORS設定（フロントエンドからのアクセスを許可）
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 開発用。必要に応じてフロントエンドのURLに絞る
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # プロジェクト直下のパスを取得
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))

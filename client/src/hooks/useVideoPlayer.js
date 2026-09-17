@@ -23,6 +23,8 @@ export function useVideoPlayer(id) {
   const [showControls, setShowControls] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
 
+  const [fullVideoInfo, setFullVideoInfo] = useState(null);
+
   // --- プレイリスト関連 ---
   const currentIndex = playlist.findIndex((video) => video.Id === id);
   const currentVideo = currentIndex !== -1 ? playlist[currentIndex] : null;
@@ -48,6 +50,52 @@ export function useVideoPlayer(id) {
       setIsFavorite(currentVideo.UserData.IsFavorite || false);
     }
   }, [id, currentVideo]);
+
+  // 動画の詳細情報（Pathなど）を取得
+  useEffect(() => {
+    const fetchVideoInfo = async () => {
+      try {
+        const { getVideoInfo } = await import('../api/jellyfin');
+        const info = await getVideoInfo(id);
+        setFullVideoInfo(info);
+      } catch (error) {
+        console.error('Failed to fetch video info', error);
+      }
+    };
+    fetchVideoInfo();
+  }, [id]);
+
+  const isTrashed = fullVideoInfo?.Path?.includes('/trash/') || fullVideoInfo?.Path?.includes('\\trash\\');
+
+  const handleTrashVideo = useCallback(async () => {
+    if (!fullVideoInfo?.Path) return;
+    if (!window.confirm('この動画をゴミ箱に移動しますか？')) return;
+    
+    try {
+      const { trashVideo } = await import('../api/backend');
+      await trashVideo(fullVideoInfo.Path);
+      alert('ゴミ箱に移動しました。');
+      navigate('/');
+    } catch (error) {
+      console.error(error);
+      alert(`エラー: ${error.message}`);
+    }
+  }, [fullVideoInfo, navigate]);
+
+  const handleRestoreVideo = useCallback(async () => {
+    if (!fullVideoInfo?.Path) return;
+    if (!window.confirm('この動画を元の場所に復元しますか？')) return;
+    
+    try {
+      const { restoreVideo } = await import('../api/backend');
+      await restoreVideo(fullVideoInfo.Path);
+      alert('復元しました。');
+      navigate('/');
+    } catch (error) {
+      console.error(error);
+      alert(`エラー: ${error.message}`);
+    }
+  }, [fullVideoInfo, navigate]);
 
   // --- コントロールバーの表示制御 ---
   const resetControlsTimeout = useCallback(() => {
@@ -213,6 +261,9 @@ export function useVideoPlayer(id) {
     handleLoadedMetadata,
     handleContainerMouseLeave,
     toggleLoop,
+    isTrashed,
+    handleTrashVideo,
+    handleRestoreVideo,
     
     handleControlsMouseEnter: useCallback(() => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);

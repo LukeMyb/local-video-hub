@@ -56,6 +56,23 @@ export const getLibraries = async () => {
   return data; // { Items: [...] } が返る
 };
 
+export const getVideoInfo = async (itemId) => {
+  if (!USER_ID) {
+    throw new Error('ユーザーIDが設定されていません');
+  }
+
+  const url = new URL(`${API_URL}/Users/${USER_ID}/Items/${itemId}`);
+  url.searchParams.append('api_key', API_KEY);
+  url.searchParams.append('Fields', 'Path');
+
+  const res = await fetch(url.toString());
+  if (!res.ok) {
+    throw new Error('動画情報の取得に失敗しました');
+  }
+
+  return await res.json();
+};
+
 export const getImageUrl = (itemId) => {
   // サムネイル画像用のURLを構築
   return `${API_URL}/Items/${itemId}/Images/Primary?fillHeight=300&fillWidth=200&quality=90`;

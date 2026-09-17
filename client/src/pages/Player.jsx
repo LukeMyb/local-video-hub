@@ -39,7 +39,10 @@ function Player() {
     handleLoadedMetadata,
     handleContainerMouseLeave,
     toggleLoop,
-    handleControlsMouseEnter
+    handleControlsMouseEnter,
+    isTrashed,
+    handleTrashVideo,
+    handleRestoreVideo
   } = useVideoPlayer(id);
 
   return (
@@ -94,6 +97,9 @@ function Player() {
         isFullscreen={isFullscreen}
         prevVideo={prevVideo}
         nextVideo={nextVideo}
+        isTrashed={isTrashed}
+        onTrash={handleTrashVideo}
+        onRestore={handleRestoreVideo}
         onPlayPause={togglePlay}
         onSeek={handleSeek}
         onSkipBackward={skipBackward}
