@@ -1,7 +1,7 @@
 // client/src/components/player/Controls.jsx
 import { 
   Play, Pause, SkipBack, SkipForward, Rewind, FastForward,
-  Maximize, Minimize, Repeat, Heart, Trash, Undo
+  Maximize, Minimize, Repeat, Heart
 } from 'lucide-react';
 import { formatTime } from '../../utils/formatters';
 
@@ -16,9 +16,6 @@ export function Controls({
   isFullscreen,
   prevVideo,
   nextVideo,
-  isTrashed,
-  onTrash,
-  onRestore,
   onPlayPause,
   onSeek,
   onSkipBackward,
@@ -111,25 +108,6 @@ export function Controls({
 
         {/* 右側のコントロール群 */}
         <div className="flex items-center gap-4 justify-end">
-          {/* ゴミ箱 / 復元ボタン */}
-          {isTrashed ? (
-            <button
-              onClick={onRestore}
-              className="transition-colors flex items-center justify-center text-zinc-300 hover:text-white"
-              title="元に戻す（復元）"
-            >
-              <Undo size={28} />
-            </button>
-          ) : (
-            <button
-              onClick={onTrash}
-              className="transition-colors flex items-center justify-center text-zinc-300 hover:text-red-400"
-              title="ゴミ箱へ移動（論理削除）"
-            >
-              <Trash size={28} />
-            </button>
-          )}
-
           {/* お気に入りボタン */}
           <button
             onClick={onToggleFavorite}

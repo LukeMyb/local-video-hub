@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Trash, Undo } from 'lucide-react';
 import { Controls } from '../components/player/Controls';
 import { useVideoPlayer } from '../hooks/useVideoPlayer';
 
@@ -53,7 +53,7 @@ function Player() {
     >
       {/* 上部コントロールバー */}
       <div 
-        className={`absolute top-0 left-0 right-0 px-8 portrait:px-4 pb-6 pt-6 portrait:pt-16 landscape:pt-6 bg-linear-to-b from-black/90 via-black/50 to-transparent transition-opacity duration-300 z-10 flex items-center gap-4 ${
+        className={`absolute top-0 left-0 right-0 px-8 portrait:px-4 pb-6 pt-6 portrait:pt-16 landscape:pt-6 bg-linear-to-b from-black/90 via-black/50 to-transparent transition-opacity duration-300 z-10 flex items-center justify-between gap-4 ${
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
@@ -64,6 +64,27 @@ function Player() {
         >
           <ArrowLeft size={24} />
         </button>
+
+        {/* 右上のアクションボタン群 */}
+        <div className="flex items-center gap-2 pr-2">
+          {isTrashed ? (
+            <button
+              onClick={handleRestoreVideo}
+              className="px-4 py-2 text-zinc-300 hover:text-white hover:bg-zinc-800/80 rounded-full transition-colors flex items-center justify-center"
+              title="元に戻す（復元）"
+            >
+              <Undo size={24} />
+            </button>
+          ) : (
+            <button
+              onClick={handleTrashVideo}
+              className="px-4 py-2 text-zinc-300 hover:text-red-400 hover:bg-zinc-800/80 rounded-full transition-colors flex items-center justify-center"
+              title="ゴミ箱へ移動（論理削除）"
+            >
+              <Trash size={24} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Videoプレイヤー */}
@@ -97,9 +118,6 @@ function Player() {
         isFullscreen={isFullscreen}
         prevVideo={prevVideo}
         nextVideo={nextVideo}
-        isTrashed={isTrashed}
-        onTrash={handleTrashVideo}
-        onRestore={handleRestoreVideo}
         onPlayPause={togglePlay}
         onSeek={handleSeek}
         onSkipBackward={skipBackward}
