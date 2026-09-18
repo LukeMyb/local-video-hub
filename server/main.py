@@ -77,7 +77,7 @@ def download_with_ytdlp(url: str):
         'ffmpeg_location': BIN_DIR,
 
         'noplaylist': True,
-        'ignoreerrors': True,
+        'ignoreerrors': False,
         'quiet': False,
     }
     
