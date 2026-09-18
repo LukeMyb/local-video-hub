@@ -91,6 +91,13 @@ def download_with_ytdlp(url: str):
         logger.info(f"[{url}] ダウンロードが完了しました！")
     except Exception as e:
         logger.error(f"[{url}] エラーが発生しました: {e}")
+        try:
+            from datetime import datetime
+            failed_file = os.path.join(LOGS_DIR, "failed.txt")
+            with open(failed_file, "a", encoding="utf-8") as f:
+                f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} {url}\n")
+        except Exception as file_e:
+            logger.error(f"[{url}] failed.txt への書き込みに失敗しました: {file_e}")
 
 @app.post("/download")
 async def download_video(request: VideoRequest, background_tasks: BackgroundTasks):
