@@ -155,12 +155,12 @@ class VideoTagger:
     def process_video(self, video_path, num_frames=5, min_hits=1):
         # すでにタグが存在する場合は、重い推論処理をスキップする
         if self._has_existing_tags(video_path):
-            print(" -> 既にタグが登録されたNFOファイルが存在するため、処理をスキップします。")
             return "skipped"
 
         frames = self.extract_frames(video_path, num_frames=num_frames)
         if not frames:
-            print(" -> エラー: 動画の読み込み、またはフレームの抽出に失敗しました。")
+            from tqdm import tqdm
+            tqdm.write(f"エラー: {os.path.basename(video_path)} の読み込み、またはフレーム抽出に失敗しました。")
             return "error"
 
         input_tensors = [self.preprocess_image(f) for f in frames]
