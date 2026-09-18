@@ -99,6 +99,34 @@ def download_with_ytdlp(url: str):
         except Exception as file_e:
             logger.error(f"[{url}] failed.txt への書き込みに失敗しました: {file_e}")
 
+import time
+
+def check_x_cookie(cookie_file):
+    """X (Twitter) のクッキーファイルの有効性を簡易チェックする"""
+    if not os.path.exists(cookie_file):
+        return False, "クッキーファイルが存在しません"
+        
+    auth_token_found = False
+    try:
+        with open(cookie_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                if line.startswith('#') or not line.strip():
+                    continue
+                parts = line.strip().split('\t')
+                if len(parts) >= 7:
+                    domain, _, _, _, expiry, name, value = parts
+                    if ('x.com' in domain or 'twitter.com' in domain) and name == 'auth_token':
+                        auth_token_found = True
+                        if int(expiry) > 0 and int(expiry) < time.time():
+                            return False, "クッキーの有効期限が切れています。再取得してください"
+                        return True, "有効です"
+    except Exception as e:
+        return False, f"クッキーファイルの読み込みに失敗しました: {e}"
+        
+    if not auth_token_found:
+        return False, "認証クッキー(auth_token)が見つかりません。未ログイン状態で取得した可能性があります"
+    return True, "有効です"
+
 @app.post("/download")
 async def download_video(request: VideoRequest, background_tasks: BackgroundTasks):
     # APIキーの検証 (未設定、または不一致の場合は401エラー)
@@ -108,6 +136,14 @@ async def download_video(request: VideoRequest, background_tasks: BackgroundTask
         raise HTTPException(status_code=401, detail="APIキーが間違っています")
 
     logger.info(f"URLを受け取りました: {request.url}")
+    
+    # X (Twitter) の場合、クッキーの有効性を事前チェック
+    if "x.com" in request.url or "twitter.com" in request.url:
+        is_valid, error_msg = check_x_cookie(COOKIE_FILE)
+        if not is_valid:
+            logger.error(f"[{request.url}] 拒否されました: {error_msg}")
+            raise HTTPException(status_code=400, detail=error_msg)
+
     
     # ダウンロード処理をバックグラウンドタスクとして登録
     background_tasks.add_task(download_with_ytdlp, request.url)
