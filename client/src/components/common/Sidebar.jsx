@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { X, Folder } from 'lucide-react';
 
 export function Sidebar({
@@ -7,13 +8,30 @@ export function Sidebar({
   selectedLibraryId,
   onSelectLibrary
 }) {
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    }
+    // コンポーネントのアンマウント時もリセット
+    return () => {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    };
+  }, [isOpen]);
+
   return (
     <>
       {/* ドロワーのオーバーレイ背景（クリックでドロワーを閉じる） */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-black/60 z-50 transition-opacity backdrop-blur-sm"
+          className="fixed inset-0 bg-black/60 z-50 transition-opacity backdrop-blur-sm touch-none"
           onClick={onClose}
+          onTouchMove={(e) => e.preventDefault()}
+          onWheel={(e) => e.preventDefault()}
         />
       )}
 
@@ -35,7 +53,7 @@ export function Sidebar({
         </div>
 
         {/* ライブラリリスト部分 */}
-        <div className="flex-1 overflow-y-auto py-2">
+        <div className="flex-1 overflow-y-auto py-2 overscroll-contain">
           {/* 全動画を表示するための「すべての動画」選択ボタン */}
           <button
             onClick={() => {
