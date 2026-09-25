@@ -48,6 +48,7 @@ os.makedirs(INBOX_DIR, exist_ok=True)
 
 # クッキーとffmpegのパス
 COOKIE_FILE = os.path.join(BASE_DIR, "config", "x.com_cookies.txt")
+TIKTOK_COOKIE_FILE = os.path.join(BASE_DIR, "config", "tiktok.com_cookies.txt")
 BIN_DIR = os.path.join(BASE_DIR, "bin")
 
 # 環境変数からAPIキーを取得
@@ -59,6 +60,10 @@ class VideoRequest(BaseModel):
 
 def download_with_ytdlp(url: str):
     logger.info(f"[{url}] ダウンロードを開始します...")
+    
+    # URLに応じて使用するクッキーファイルを切り替え
+    is_tiktok = "tiktok.com" in url
+    current_cookie_file = TIKTOK_COOKIE_FILE if is_tiktok else COOKIE_FILE
     
     # オプションを設定
     ydl_opts = {
@@ -73,7 +78,7 @@ def download_with_ytdlp(url: str):
         'postprocessor_args': ['-c:a', 'aac'],
         
         # クッキーファイルの指定
-        'cookiefile': COOKIE_FILE,
+        'cookiefile': current_cookie_file,
         'ffmpeg_location': BIN_DIR,
 
         'noplaylist': True,
@@ -82,8 +87,8 @@ def download_with_ytdlp(url: str):
     }
     
     # クッキーファイルが存在しない場合の警告
-    if not os.path.exists(COOKIE_FILE):
-        logger.warning(f"[{url}] クッキーファイルが見つかりません: {COOKIE_FILE}")
+    if not os.path.exists(current_cookie_file):
+        logger.warning(f"[{url}] クッキーファイルが見つかりません: {current_cookie_file}")
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -127,6 +132,33 @@ def check_x_cookie(cookie_file):
         return False, "認証クッキー(auth_token)が見つかりません。未ログイン状態で取得した可能性があります"
     return True, "有効です"
 
+
+def check_tiktok_cookie(cookie_file):
+    """TikTok のクッキーファイルの有効性を簡易チェックする"""
+    if not os.path.exists(cookie_file):
+        return False, "TikTokのクッキーファイルが存在しません"
+        
+    sessionid_found = False
+    try:
+        with open(cookie_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                if line.startswith('#') or not line.strip():
+                    continue
+                parts = line.strip().split('\t')
+                if len(parts) >= 7:
+                    domain, _, _, _, expiry, name, value = parts
+                    if 'tiktok.com' in domain and name == 'sessionid':
+                        sessionid_found = True
+                        if int(expiry) > 0 and int(expiry) < time.time():
+                            return False, "TikTokクッキーの有効期限が切れています。再取得してください"
+                        return True, "有効です"
+    except Exception as e:
+        return False, f"クッキーファイルの読み込みに失敗しました: {e}"
+        
+    if not sessionid_found:
+        return False, "認証クッキー(sessionid)が見つかりません。未ログイン状態で取得した可能性があります"
+    return True, "有効です"
+
 @app.post("/download")
 async def download_video(request: VideoRequest, background_tasks: BackgroundTasks):
     # APIキーの検証 (未設定、または不一致の場合は401エラー)
@@ -137,9 +169,14 @@ async def download_video(request: VideoRequest, background_tasks: BackgroundTask
 
     logger.info(f"URLを受け取りました: {request.url}")
     
-    # X (Twitter) の場合、クッキーの有効性を事前チェック
+        # URLによるクッキーの有効性を事前チェック
     if "x.com" in request.url or "twitter.com" in request.url:
         is_valid, error_msg = check_x_cookie(COOKIE_FILE)
+        if not is_valid:
+            logger.error(f"[{request.url}] 拒否されました: {error_msg}")
+            raise HTTPException(status_code=400, detail=error_msg)
+    elif "tiktok.com" in request.url:
+        is_valid, error_msg = check_tiktok_cookie(TIKTOK_COOKIE_FILE)
         if not is_valid:
             logger.error(f"[{request.url}] 拒否されました: {error_msg}")
             raise HTTPException(status_code=400, detail=error_msg)
