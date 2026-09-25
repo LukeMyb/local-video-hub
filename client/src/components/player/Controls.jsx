@@ -111,7 +111,7 @@ export function Controls({
           {/* お気に入りボタン */}
           <button
             onClick={onToggleFavorite}
-            className={`transition-colors flex items-center justify-center mr-2 sm:mr-4 ${isFavorite ? 'text-white' : 'text-zinc-300 hover:text-white'}`}
+            className={`transition-colors flex items-center justify-center mr-2 sm:mr-4 ${isFavorite ? 'text-rose-500' : 'text-zinc-300 hover:text-white'}`}
             title={isFavorite ? "お気に入り解除" : "お気に入り登録"}
           >
             <Heart size={28} className={isFavorite ? 'fill-current' : ''} />
