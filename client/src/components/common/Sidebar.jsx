@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { X, Folder } from 'lucide-react';
+import { X, Folder, Plus, Trash } from 'lucide-react';
 
 export function Sidebar({
   isOpen,
@@ -42,14 +42,31 @@ export function Sidebar({
         }`}
       >
         {/* ドロワーヘッダー部分 */}
-        <div className="flex items-center justify-between p-4 border-b border-zinc-800">
+        <div className="flex items-center justify-between p-4 portrait:pt-16 md:portrait:pt-4 border-b border-zinc-800">
           <h2 className="text-lg font-bold text-zinc-100">ライブラリ</h2>
-          <button 
-            onClick={onClose}
-            className="p-2 text-zinc-400 hover:text-white rounded-md transition-colors"
-          >
-            <X size={24} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-colors"
+              title="ライブラリを作成"
+            >
+              <Plus size={20} />
+            </button>
+            <button
+              type="button"
+              className="p-2 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-md transition-colors"
+              title="ライブラリを削除"
+            >
+              <Trash size={20} />
+            </button>
+            <button 
+              onClick={onClose}
+              className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-colors"
+              title="閉じる"
+            >
+              <X size={24} />
+            </button>
+          </div>
         </div>
 
         {/* ライブラリリスト部分 */}
