@@ -12,6 +12,8 @@ function Player() {
     videoRef,
     containerRef,
     videoUrl,
+    scale,
+    position,
     isLoop,
     isMobile,
     isFullscreen,
@@ -48,7 +50,7 @@ function Player() {
   return (
     <div 
       ref={containerRef} 
-      className="fixed inset-0 z-50 w-full h-100dvh bg-black flex flex-col justify-center"
+      className="fixed inset-0 z-50 w-full h-100dvh bg-black flex flex-col justify-center overflow-hidden"
       onMouseLeave={handleContainerMouseLeave}
     >
       {/* 上部コントロールバー */}
@@ -94,7 +96,11 @@ function Player() {
         playsInline
         loop={isLoop}
         onEnded={handleEnded}
-        className={`w-full h-full object-contain bg-black ${showControls ? 'cursor-pointer' : 'cursor-none'}`}
+        className={`w-full h-full object-contain bg-black touch-none ${showControls ? 'cursor-pointer' : 'cursor-none'}`}
+        style={{
+          transform: `translate3d(${position.x}px, ${position.y}px, 0) scale(${scale})`,
+          transformOrigin: 'center center',
+        }}
         src={videoUrl}
         onMouseDown={(e) => e.stopPropagation()}
         onClick={handleVideoClick}

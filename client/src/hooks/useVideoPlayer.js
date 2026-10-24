@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getVideoStreamUrl, toggleFavorite } from '../api/jellyfin';
 import { useLocalStorage } from './useLocalStorage';
+import { usePinchZoom } from './usePinchZoom';
 
 export function useVideoPlayer(id) {
   const navigate = useNavigate();
@@ -13,6 +14,8 @@ export function useVideoPlayer(id) {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
   const timeoutRef = useRef(null);
+
+  const { scale, position, isGestureRef, resetZoom } = usePinchZoom(containerRef);
 
   const [isLoop, setIsLoop] = useLocalStorage('jellyfin_isLoop', false);
   const [isMobile, setIsMobile] = useState(false);
@@ -187,12 +190,18 @@ export function useVideoPlayer(id) {
   }, [id, isFavorite, currentVideo]);
 
   const handlePrev = useCallback(() => {
-    if (prevVideo) navigate(`/player/${prevVideo.Id}`, { state: { playlist } });
-  }, [prevVideo, navigate, playlist]);
+    if (prevVideo) {
+      resetZoom();
+      navigate(`/player/${prevVideo.Id}`, { state: { playlist } });
+    }
+  }, [prevVideo, navigate, playlist, resetZoom]);
 
   const handleNext = useCallback(() => {
-    if (nextVideo) navigate(`/player/${nextVideo.Id}`, { state: { playlist } });
-  }, [nextVideo, navigate, playlist]);
+    if (nextVideo) {
+      resetZoom();
+      navigate(`/player/${nextVideo.Id}`, { state: { playlist } });
+    }
+  }, [nextVideo, navigate, playlist, resetZoom]);
 
   const handleEnded = useCallback(() => {
     if (isLoop && videoRef.current) videoRef.current.play();
@@ -228,9 +237,13 @@ export function useVideoPlayer(id) {
   }, []);
 
   const handleVideoClick = useCallback(() => {
+    if (isGestureRef.current) {
+      isGestureRef.current = false;
+      return;
+    }
     if (showControls) setShowControls(false);
     else resetControlsTimeout();
-  }, [showControls, resetControlsTimeout]);
+  }, [isGestureRef, showControls, resetControlsTimeout]);
 
   // Video要素のイベントをStateに反映するハンドラ
   const handlePlay = useCallback(() => setIsPlaying(true), []);
@@ -239,8 +252,9 @@ export function useVideoPlayer(id) {
     if (videoRef.current) setCurrentTime(videoRef.current.currentTime);
   }, []);
   const handleLoadedMetadata = useCallback(() => {
+    resetZoom();
     if (videoRef.current) setDuration(videoRef.current.duration);
-  }, []);
+  }, [resetZoom]);
   
   const handleContainerMouseLeave = useCallback(() => {
     if (isPlaying) setShowControls(false);
@@ -255,6 +269,8 @@ export function useVideoPlayer(id) {
     videoRef,
     containerRef,
     videoUrl,
+    scale,
+    position,
     isLoop,
     isMobile,
     isFullscreen,
