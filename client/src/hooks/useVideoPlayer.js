@@ -16,6 +16,7 @@ export function useVideoPlayer(id) {
   const containerRef = useRef(null);
   const timeoutRef = useRef(null);
   const isFineSeekActiveRef = useRef(false);
+  const closeFineSeekRef = useRef(null);
 
   const { scale, position, isGestureRef, resetZoom } = usePinchZoom(containerRef);
 
@@ -40,7 +41,7 @@ export function useVideoPlayer(id) {
     [duration]
   );
 
-  const handleControlsMouseEnter = useCallback(() => {
+  const keepControlsOpen = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setShowControls(true);
   }, []);
@@ -54,19 +55,28 @@ export function useVideoPlayer(id) {
     timeoutRef.current = setTimeout(() => {
       if (isFineSeekActiveRef.current) return;
       setShowControls(false);
+      if (closeFineSeekRef.current) closeFineSeekRef.current();
     }, 3000);
   }, [isPlaying]);
+
+  const handleControlsMouseEnter = useCallback(() => {
+    resetControlsTimeout();
+  }, [resetControlsTimeout]);
 
   const fineSeek = useFineSeek({
     duration,
     currentTime,
     seekTo,
     isFineSeekActiveRef,
-    onKeepControlsOpen: handleControlsMouseEnter,
+    onKeepControlsOpen: keepControlsOpen,
     onRestartControlsTimeout: resetControlsTimeout,
   });
 
-  const { resetFineSeek, updateLastPlaybackTime } = fineSeek;
+  const { closeFineSeek, resetFineSeek, updateLastPlaybackTime } = fineSeek;
+
+  useEffect(() => {
+    closeFineSeekRef.current = closeFineSeek;
+  }, [closeFineSeek]);
 
   // --- プレイリスト関連 ---
   const currentIndex = playlist.findIndex((video) => video.Id === id);
@@ -168,6 +178,7 @@ export function useVideoPlayer(id) {
     window.addEventListener('mousedown', handleActivity);
     window.addEventListener('keydown', handleActivity);
     window.addEventListener('touchstart', handleActivity);
+    window.addEventListener('touchmove', handleActivity, { passive: true });
     
     resetControlsTimeout();
 
@@ -177,6 +188,7 @@ export function useVideoPlayer(id) {
       window.removeEventListener('mousedown', handleActivity);
       window.removeEventListener('keydown', handleActivity);
       window.removeEventListener('touchstart', handleActivity);
+      window.removeEventListener('touchmove', handleActivity);
     };
   }, [resetControlsTimeout]);
 
@@ -276,11 +288,11 @@ export function useVideoPlayer(id) {
     }
     if (showControls) {
       setShowControls(false);
-      resetFineSeek();
+      closeFineSeek();
     } else {
       resetControlsTimeout();
     }
-  }, [isGestureRef, showControls, resetControlsTimeout, resetFineSeek]);
+  }, [isGestureRef, showControls, resetControlsTimeout, closeFineSeek]);
 
   // Video要素のイベントをStateに反映するハンドラ
   const handlePlay = useCallback(() => setIsPlaying(true), []);
@@ -304,8 +316,9 @@ export function useVideoPlayer(id) {
   const handleContainerMouseLeave = useCallback(() => {
     if (isPlaying && !isFineSeekActiveRef.current) {
       setShowControls(false);
+      closeFineSeek();
     }
-  }, [isPlaying]);
+  }, [isPlaying, closeFineSeek]);
 
   // ループ状態のトグル関数
   const toggleLoop = useCallback(() => {

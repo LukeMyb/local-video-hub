@@ -1,7 +1,7 @@
 // client/src/components/player/Controls.jsx
 import { 
   Play, Pause, SkipBack, SkipForward, Rewind, FastForward,
-  Maximize, Minimize, Repeat, Heart, X
+  Maximize, Minimize, Repeat, Heart
 } from 'lucide-react';
 import { formatTime } from '../../utils/formatters';
 
@@ -40,7 +40,6 @@ export function Controls({
     handleFineBarStart,
     handleFineBarChange,
     handleFineBarEnd,
-    closeFineSeek,
   } = fineSeek || {};
 
   const safeDuration = duration || 100;
@@ -104,15 +103,6 @@ export function Controls({
           <span className="text-zinc-400 text-xs font-mono w-11 shrink-0">
             {formatTime(fineMax)}
           </span>
-
-          <button
-            type="button"
-            onClick={closeFineSeek}
-            className="p-1 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 transition-colors shrink-0"
-            title="詳細シークを閉じる"
-          >
-            <X size={16} />
-          </button>
         </div>
       )}
 

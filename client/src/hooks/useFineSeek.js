@@ -26,7 +26,6 @@ export function useFineSeek({
   const fineCenterTimeRef = useRef(0);
   const originTimeRef = useRef(null);
   const lastPlaybackTimeRef = useRef(0);
-  const isFineSeekOpenRef = useRef(false);
 
   const isPressingMainBarRef = useRef(false);
   const isPressingFineBarRef = useRef(false);
@@ -69,8 +68,6 @@ export function useFineSeek({
     longPressTimerRef.current = setTimeout(() => {
       const center = latestTimeRef.current;
       isHoldingFineRef.current = true;
-      isFineSeekOpenRef.current = true;
-      isFineSeekActiveRef.current = true;
       suppressInitialJumpRef.current = false;
       holdAnchorXRef.current = lastClientXRef.current;
       holdAnchorTimeRef.current = center;
@@ -80,31 +77,24 @@ export function useFineSeek({
         navigator.vibrate(15);
       }
     }, 400);
-  }, [clearLongPressTimer, isFineSeekActiveRef, updateFineCenter]);
+  }, [clearLongPressTimer, updateFineCenter]);
 
-  const resetFineSeek = useCallback(() => {
+  const closeFineSeek = useCallback(() => {
     clearLongPressTimer();
     isPressingMainBarRef.current = false;
     isPressingFineBarRef.current = false;
     isHoldingFineRef.current = false;
     isSeekingRef.current = false;
     suppressInitialJumpRef.current = false;
-    isFineSeekOpenRef.current = false;
     isFineSeekActiveRef.current = false;
-    originTimeRef.current = null;
     setIsFineSeekOpen(false);
-    setOriginTime(null);
   }, [clearLongPressTimer, isFineSeekActiveRef]);
 
-  const closeFineSeek = useCallback(() => {
-    clearLongPressTimer();
-    isHoldingFineRef.current = false;
-    isPressingFineBarRef.current = false;
-    isFineSeekOpenRef.current = false;
-    isFineSeekActiveRef.current = false;
-    setIsFineSeekOpen(false);
-    if (onRestartControlsTimeout) onRestartControlsTimeout();
-  }, [clearLongPressTimer, isFineSeekActiveRef, onRestartControlsTimeout]);
+  const resetFineSeek = useCallback(() => {
+    closeFineSeek();
+    originTimeRef.current = null;
+    setOriginTime(null);
+  }, [closeFineSeek]);
 
   const updateLastPlaybackTime = useCallback((time) => {
     if (!isSeekingRef.current && !isPressingMainBarRef.current && !isPressingFineBarRef.current) {
@@ -146,6 +136,7 @@ export function useFineSeek({
   const finalizeFineBarRelease = useCallback(() => {
     isPressingFineBarRef.current = false;
     isSeekingRef.current = false;
+    isFineSeekActiveRef.current = false;
 
     const releasedTime = latestTimeRef.current;
     lastPlaybackTimeRef.current = releasedTime;
@@ -167,7 +158,9 @@ export function useFineSeek({
     ) {
       updateFineCenter(releasedTime);
     }
-  }, [updateFineCenter, updateOriginTime]);
+
+    if (onRestartControlsTimeout) onRestartControlsTimeout();
+  }, [isFineSeekActiveRef, onRestartControlsTimeout, updateFineCenter, updateOriginTime]);
 
   useEffect(() => {
     const handleMove = (e) => {
@@ -217,6 +210,7 @@ export function useFineSeek({
       isPressingMainBarRef.current = false;
       suppressInitialJumpRef.current = false;
       isSeekingRef.current = false;
+      isFineSeekActiveRef.current = false;
 
       const releasedTime = latestTimeRef.current;
       lastPlaybackTimeRef.current = releasedTime;
@@ -229,10 +223,9 @@ export function useFineSeek({
         if (Math.abs(releasedTime - fineCenterTimeRef.current) > halfWindow * 0.7) {
           updateFineCenter(releasedTime);
         }
-      } else if (!isFineSeekOpenRef.current) {
-        isFineSeekActiveRef.current = false;
-        if (onRestartControlsTimeout) onRestartControlsTimeout();
       }
+
+      if (onRestartControlsTimeout) onRestartControlsTimeout();
     };
 
     window.addEventListener('touchmove', handleMove, { passive: true });
@@ -292,15 +285,6 @@ export function useFineSeek({
     finalizeFineBarRelease();
   }, [finalizeFineBarRelease]);
 
-  const handleRestoreOriginTime = useCallback(() => {
-    if (originTimeRef.current === null) return;
-    const target = originTimeRef.current;
-    latestTimeRef.current = target;
-    lastPlaybackTimeRef.current = target;
-    seekTo(target);
-    updateFineCenter(target);
-  }, [seekTo, updateFineCenter]);
-
   const fineHalfWindow = getFineHalfWindow(duration);
   const safeDuration = duration || 100;
   const fineSpan = Math.min(fineHalfWindow * 2, safeDuration);
@@ -323,7 +307,6 @@ export function useFineSeek({
     handleFineBarStart,
     handleFineBarChange,
     handleFineBarEnd,
-    handleRestoreOriginTime,
     closeFineSeek,
     resetFineSeek,
     updateLastPlaybackTime,
