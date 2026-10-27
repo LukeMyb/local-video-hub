@@ -44,7 +44,8 @@ function Player() {
     handleControlsMouseEnter,
     isTrashed,
     handleTrashVideo,
-    handleRestoreVideo
+    handleRestoreVideo,
+    fineSeek
   } = useVideoPlayer(id);
 
   return (
@@ -55,6 +56,7 @@ function Player() {
     >
       {/* 上部コントロールバー */}
       <div 
+        data-controls
         className={`absolute top-0 left-0 right-0 px-8 portrait:px-4 pb-6 pt-6 portrait:pt-16 landscape:pt-6 bg-linear-to-b from-black/90 via-black/50 to-transparent transition-opacity duration-300 z-10 flex items-center justify-between gap-4 ${
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
@@ -135,6 +137,7 @@ function Player() {
         onToggleFullscreen={toggleFullscreen}
         onMouseEnter={handleControlsMouseEnter}
         onMouseLeave={resetControlsTimeout}
+        fineSeek={fineSeek}
       />
     </div>
   );

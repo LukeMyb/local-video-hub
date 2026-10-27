@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { getVideoStreamUrl, toggleFavorite } from '../api/jellyfin';
 import { useLocalStorage } from './useLocalStorage';
 import { usePinchZoom } from './usePinchZoom';
+import { useFineSeek } from './useFineSeek';
 
 export function useVideoPlayer(id) {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ export function useVideoPlayer(id) {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
   const timeoutRef = useRef(null);
+  const isFineSeekActiveRef = useRef(false);
 
   const { scale, position, isGestureRef, resetZoom } = usePinchZoom(containerRef);
 
@@ -27,6 +29,44 @@ export function useVideoPlayer(id) {
   const [isFavorite, setIsFavorite] = useState(false);
 
   const [fullVideoInfo, setFullVideoInfo] = useState(null);
+
+  const seekTo = useCallback(
+    (time) => {
+      const maxDur = videoRef.current?.duration || duration || 0;
+      const clamped = maxDur > 0 ? Math.min(Math.max(0, Number(time)), maxDur) : Math.max(0, Number(time));
+      if (videoRef.current) videoRef.current.currentTime = clamped;
+      setCurrentTime(clamped);
+    },
+    [duration]
+  );
+
+  const handleControlsMouseEnter = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setShowControls(true);
+  }, []);
+
+  // --- コントロールバーの表示制御 ---
+  const resetControlsTimeout = useCallback(() => {
+    setShowControls(true);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (!isPlaying || isFineSeekActiveRef.current) return;
+
+    timeoutRef.current = setTimeout(() => {
+      if (isFineSeekActiveRef.current) return;
+      setShowControls(false);
+    }, 3000);
+  }, [isPlaying]);
+
+  const fineSeek = useFineSeek({
+    duration,
+    currentTime,
+    seekTo,
+    isFineSeekActiveRef,
+    onKeepControlsOpen: handleControlsMouseEnter,
+    onRestartControlsTimeout: resetControlsTimeout,
+  });
+
+  const { resetFineSeek, updateLastPlaybackTime } = fineSeek;
 
   // --- プレイリスト関連 ---
   const currentIndex = playlist.findIndex((video) => video.Id === id);
@@ -122,17 +162,6 @@ export function useVideoPlayer(id) {
     }
   }, [fullVideoInfo, hideVideoLocally, navigate]);
 
-  // --- コントロールバーの表示制御 ---
-  const resetControlsTimeout = useCallback(() => {
-    setShowControls(true);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    if (!isPlaying) return;
-    
-    timeoutRef.current = setTimeout(() => {
-      setShowControls(false);
-    }, 3000);
-  }, [isPlaying]);
-
   useEffect(() => {
     const handleActivity = () => resetControlsTimeout();
     window.addEventListener('mousemove', handleActivity);
@@ -192,16 +221,18 @@ export function useVideoPlayer(id) {
   const handlePrev = useCallback(() => {
     if (prevVideo) {
       resetZoom();
+      resetFineSeek();
       navigate(`/player/${prevVideo.Id}`, { state: { playlist } });
     }
-  }, [prevVideo, navigate, playlist, resetZoom]);
+  }, [prevVideo, navigate, playlist, resetZoom, resetFineSeek]);
 
   const handleNext = useCallback(() => {
     if (nextVideo) {
       resetZoom();
+      resetFineSeek();
       navigate(`/player/${nextVideo.Id}`, { state: { playlist } });
     }
-  }, [nextVideo, navigate, playlist, resetZoom]);
+  }, [nextVideo, navigate, playlist, resetZoom, resetFineSeek]);
 
   const handleEnded = useCallback(() => {
     if (isLoop && videoRef.current) videoRef.current.play();
@@ -230,34 +261,50 @@ export function useVideoPlayer(id) {
     }
   }, [duration]);
 
-  const handleSeek = useCallback((e) => {
-    const time = Number(e.target.value);
-    if (videoRef.current) videoRef.current.currentTime = time;
-    setCurrentTime(time);
-  }, []);
+  const handleSeek = useCallback(
+    (e) => {
+      const time = typeof e === 'number' ? e : Number(e.target.value);
+      seekTo(time);
+    },
+    [seekTo]
+  );
 
   const handleVideoClick = useCallback(() => {
     if (isGestureRef.current) {
       isGestureRef.current = false;
       return;
     }
-    if (showControls) setShowControls(false);
-    else resetControlsTimeout();
-  }, [isGestureRef, showControls, resetControlsTimeout]);
+    if (showControls) {
+      setShowControls(false);
+      resetFineSeek();
+    } else {
+      resetControlsTimeout();
+    }
+  }, [isGestureRef, showControls, resetControlsTimeout, resetFineSeek]);
 
   // Video要素のイベントをStateに反映するハンドラ
   const handlePlay = useCallback(() => setIsPlaying(true), []);
   const handlePause = useCallback(() => setIsPlaying(false), []);
   const handleTimeUpdate = useCallback(() => {
-    if (videoRef.current) setCurrentTime(videoRef.current.currentTime);
-  }, []);
+    if (videoRef.current) {
+      const t = videoRef.current.currentTime;
+      setCurrentTime(t);
+      updateLastPlaybackTime(t);
+    }
+  }, [updateLastPlaybackTime]);
   const handleLoadedMetadata = useCallback(() => {
     resetZoom();
-    if (videoRef.current) setDuration(videoRef.current.duration);
-  }, [resetZoom]);
+    resetFineSeek();
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration);
+      updateLastPlaybackTime(videoRef.current.currentTime || 0);
+    }
+  }, [resetZoom, resetFineSeek, updateLastPlaybackTime]);
   
   const handleContainerMouseLeave = useCallback(() => {
-    if (isPlaying) setShowControls(false);
+    if (isPlaying && !isFineSeekActiveRef.current) {
+      setShowControls(false);
+    }
   }, [isPlaying]);
 
   // ループ状態のトグル関数
@@ -302,10 +349,7 @@ export function useVideoPlayer(id) {
     isTrashed,
     handleTrashVideo,
     handleRestoreVideo,
-    
-    handleControlsMouseEnter: useCallback(() => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      setShowControls(true);
-    }, [])
+    handleControlsMouseEnter,
+    fineSeek,
   };
 }

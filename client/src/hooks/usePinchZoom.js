@@ -61,7 +61,7 @@ export function usePinchZoom(containerRef) {
         prevMidpoint = getMidpoint(e.touches);
       } else if (e.touches.length === 1) {
         isGestureRef.current = false;
-        if (e.target.closest('button, input')) return;
+        if (e.target.closest('button, input, [data-controls]')) return;
 
         if (scaleRef.current > 1) {
           isPanning = true;
@@ -138,7 +138,7 @@ export function usePinchZoom(containerRef) {
         prevMidpoint = null;
       }
 
-      if (e.touches.length === 1 && scaleRef.current > 1) {
+      if (e.touches.length === 1 && scaleRef.current > 1 && !e.target.closest('button, input, [data-controls]')) {
         isPanning = true;
         prevTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         startTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
