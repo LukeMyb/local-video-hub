@@ -12,6 +12,7 @@ function Player() {
     videoRef,
     containerRef,
     videoUrl,
+    videoFileName,
     scale,
     position,
     isLoop,
@@ -61,16 +62,27 @@ function Player() {
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
-        <button 
-          onClick={() => navigate('/')}
-          className="px-4 py-2 text-zinc-300 hover:text-white hover:bg-zinc-800/80 rounded-full transition-colors flex items-center justify-center"
-          title="一覧へ戻る"
-        >
-          <ArrowLeft size={24} />
-        </button>
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <button 
+            onClick={() => navigate('/')}
+            className="px-4 py-2 text-zinc-300 hover:text-white hover:bg-zinc-800/80 rounded-full transition-colors flex items-center justify-center shrink-0"
+            title="一覧へ戻る"
+          >
+            <ArrowLeft size={24} />
+          </button>
+
+          {videoFileName && (
+            <span
+              className="text-zinc-200 text-sm sm:text-base font-medium truncate text-left"
+              title={videoFileName}
+            >
+              {videoFileName}
+            </span>
+          )}
+        </div>
 
         {/* 右上のアクションボタン群 */}
-        <div className="flex items-center gap-2 pr-2">
+        <div className="flex items-center gap-2 pr-2 shrink-0">
           {isTrashed ? (
             <button
               onClick={handleRestoreVideo}

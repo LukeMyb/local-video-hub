@@ -119,6 +119,10 @@ export function useVideoPlayer(id) {
   }, [id]);
 
   const isTrashed = fullVideoInfo?.Path?.includes('/trash/') || fullVideoInfo?.Path?.includes('\\trash\\');
+  const videoFileName =
+    fullVideoInfo?.Id === id
+      ? fullVideoInfo?.Path?.split(/[\\/]/).pop() || fullVideoInfo?.Name || ''
+      : '';
 
   const hideVideoLocally = useCallback(() => {
     const hidden = JSON.parse(sessionStorage.getItem('jellyfin_hidden_ids') || '{}');
@@ -329,6 +333,7 @@ export function useVideoPlayer(id) {
     videoRef,
     containerRef,
     videoUrl,
+    videoFileName,
     scale,
     position,
     isLoop,
