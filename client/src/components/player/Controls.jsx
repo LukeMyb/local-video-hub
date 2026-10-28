@@ -4,6 +4,7 @@ import {
   Maximize, Minimize, Repeat, Heart
 } from 'lucide-react';
 import { formatTime } from '../../utils/formatters';
+import { getLevelBounds } from '../../hooks/useFineSeek';
 
 export function Controls({
   showControls,
@@ -30,29 +31,22 @@ export function Controls({
   fineSeek,
 }) {
   const {
-    mainBarRef,
-    isFineSeekOpen,
-    originTime,
-    fineMin = 0,
-    fineMax = 100,
-    handleMainBarStart,
-    handleMainBarChange,
-    handleFineBarStart,
-    handleFineBarChange,
-    handleFineBarEnd,
+    fineLevels = [],
+    originTime = null,
+    handleBarStart,
+    handleBarChange,
   } = fineSeek || {};
 
   const safeDuration = duration || 100;
-  const fineRange = Math.max(fineMax - fineMin, 0.1);
-  const originInFineRange =
-    originTime !== null && originTime >= fineMin && originTime <= fineMax;
-  const originFinePercent = originInFineRange
-    ? Math.min(Math.max(((originTime - fineMin) / fineRange) * 100, 0), 100)
-    : 0;
   const originMainPercent =
     originTime !== null && duration > 0
       ? Math.min(Math.max((originTime / safeDuration) * 100, 0), 100)
       : 0;
+
+  // 新しく開いた（より細かい）詳細シークバーほど上に表示されるよう逆順で描画
+  const levelsTopToBottom = fineLevels
+    .map((level, index) => ({ ...level, index }))
+    .reverse();
 
   return (
     <div 
@@ -63,48 +57,56 @@ export function Controls({
         showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
       }`}
     >
-      {/* 長押し時に表示される詳細シークUI */}
-      {isFineSeekOpen && (
-        <div
-          className="mb-3 px-3 py-2 rounded-xl bg-zinc-900/95 border border-zinc-700/80 shadow-lg backdrop-blur-sm select-none flex items-center gap-3"
-          onContextMenu={(e) => e.preventDefault()}
-        >
-          <span className="text-zinc-400 text-xs font-mono w-11 text-right shrink-0">
-            {formatTime(fineMin)}
-          </span>
+      {/* 長押し時に再帰的にスタック表示される詳細シークバー群 */}
+      {levelsTopToBottom.map(({ halfWindow, centerTime, index }) => {
+        const { min, max, range } = getLevelBounds(centerTime, halfWindow, safeDuration);
+        const originInFineRange =
+          originTime !== null && originTime >= min && originTime <= max;
+        const originFinePercent = originInFineRange
+          ? Math.min(Math.max(((originTime - min) / range) * 100, 0), 100)
+          : 0;
 
-          <div className="relative flex-1 flex items-center py-2">
-            <input
-              type="range"
-              min={fineMin}
-              max={fineMax}
-              step={0.1}
-              value={Math.min(Math.max(currentTime, fineMin), fineMax)}
-              onChange={handleFineBarChange}
-              onTouchStart={handleFineBarStart}
-              onMouseDown={handleFineBarStart}
-              onTouchEnd={handleFineBarEnd}
-              onMouseUp={handleFineBarEnd}
-              className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-400"
-            />
+        return (
+          <div
+            key={index}
+            className="mb-2.5 px-3 py-2 rounded-xl bg-zinc-900/95 border border-zinc-700/80 shadow-lg backdrop-blur-sm select-none flex items-center gap-3"
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <span className="text-zinc-400 text-xs font-mono w-11 text-right shrink-0">
+              {formatTime(min)}
+            </span>
 
-            {/* 詳細バー上の元の位置マーカー */}
-            {originInFineRange && (
-              <div
-                className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 pointer-events-none z-10 flex flex-col items-center"
-                style={{ left: `${originFinePercent}%` }}
-              >
-                <div className="w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-amber-400 mb-0.5" />
-                <div className="w-0.5 h-4 bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.9)]" />
-              </div>
-            )}
+            <div className="relative flex-1 flex items-center py-2">
+              <input
+                type="range"
+                min={min}
+                max={max}
+                step={0.1}
+                value={Math.min(Math.max(currentTime, min), max)}
+                onChange={handleBarChange}
+                onTouchStart={(e) => handleBarStart(index, e)}
+                onMouseDown={(e) => handleBarStart(index, e)}
+                className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-400"
+              />
+
+              {/* 詳細バー上の元の位置マーカー */}
+              {originInFineRange && (
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 pointer-events-none z-10 flex flex-col items-center"
+                  style={{ left: `${originFinePercent}%` }}
+                >
+                  <div className="w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-amber-400 mb-0.5" />
+                  <div className="w-0.5 h-4 bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.9)]" />
+                </div>
+              )}
+            </div>
+
+            <span className="text-zinc-400 text-xs font-mono w-11 shrink-0">
+              {formatTime(max)}
+            </span>
           </div>
-
-          <span className="text-zinc-400 text-xs font-mono w-11 shrink-0">
-            {formatTime(fineMax)}
-          </span>
-        </div>
-      )}
+        );
+      })}
 
       {/* シークバーエリア */}
       <div
@@ -114,15 +116,14 @@ export function Controls({
         <span className="text-white text-sm font-mono">{formatTime(currentTime)}</span>
         <div className="relative flex-1 flex items-center py-1.5">
           <input
-            ref={mainBarRef}
             type="range"
             min={0}
             max={safeDuration}
             step="any"
             value={currentTime}
-            onChange={handleMainBarChange || onSeek}
-            onTouchStart={handleMainBarStart}
-            onMouseDown={handleMainBarStart}
+            onChange={handleBarChange || onSeek}
+            onTouchStart={(e) => handleBarStart && handleBarStart(-1, e)}
+            onMouseDown={(e) => handleBarStart && handleBarStart(-1, e)}
             className="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:h-2 transition-all"
           />
 
