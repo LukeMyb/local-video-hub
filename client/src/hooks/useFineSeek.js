@@ -25,7 +25,7 @@ export function useFineSeek({
   const durationRef = useRef(duration);
   const fineCenterTimeRef = useRef(0);
   const originTimeRef = useRef(null);
-  const lastPlaybackTimeRef = useRef(0);
+  const lastPlaybackTimeRef = useRef(currentTime);
 
   const isPressingMainBarRef = useRef(false);
   const isPressingFineBarRef = useRef(false);
@@ -40,6 +40,9 @@ export function useFineSeek({
 
   useEffect(() => {
     latestTimeRef.current = currentTime;
+    if (!isSeekingRef.current && !isPressingMainBarRef.current && !isPressingFineBarRef.current) {
+      lastPlaybackTimeRef.current = currentTime;
+    }
   }, [currentTime]);
 
   useEffect(() => {
@@ -87,13 +90,12 @@ export function useFineSeek({
     isSeekingRef.current = false;
     suppressInitialJumpRef.current = false;
     isFineSeekActiveRef.current = false;
+    updateOriginTime(null);
     setIsFineSeekOpen(false);
-  }, [clearLongPressTimer, isFineSeekActiveRef]);
+  }, [clearLongPressTimer, isFineSeekActiveRef, updateOriginTime]);
 
   const resetFineSeek = useCallback(() => {
     closeFineSeek();
-    originTimeRef.current = null;
-    setOriginTime(null);
   }, [closeFineSeek]);
 
   const updateLastPlaybackTime = useCallback((time) => {
@@ -114,9 +116,8 @@ export function useFineSeek({
 
       if (onKeepControlsOpen) onKeepControlsOpen();
 
-      if (originTimeRef.current === null) {
-        updateOriginTime(lastPlaybackTimeRef.current);
-      }
+      // シークバーに触れた瞬間の再生位置を一度だけ記録して表示
+      updateOriginTime(lastPlaybackTimeRef.current);
 
       const bar = mainBarRef.current;
       const dur = durationRef.current;
@@ -140,7 +141,8 @@ export function useFineSeek({
 
     const releasedTime = latestTimeRef.current;
     lastPlaybackTimeRef.current = releasedTime;
-    updateOriginTime(releasedTime);
+    // 指を離したら元の位置マーカーを非表示にする
+    updateOriginTime(null);
 
     const dur = durationRef.current || 100;
     const halfWindow = getFineHalfWindow(dur);
@@ -214,7 +216,8 @@ export function useFineSeek({
 
       const releasedTime = latestTimeRef.current;
       lastPlaybackTimeRef.current = releasedTime;
-      updateOriginTime(releasedTime);
+      // 指を離したら元の位置マーカーを非表示にする
+      updateOriginTime(null);
 
       if (isHoldingFineRef.current) {
         isHoldingFineRef.current = false;
@@ -269,7 +272,9 @@ export function useFineSeek({
     isSeekingRef.current = true;
     isFineSeekActiveRef.current = true;
     if (onKeepControlsOpen) onKeepControlsOpen();
-  }, [isFineSeekActiveRef, onKeepControlsOpen]);
+    // 詳細シークバーに触れた瞬間の再生位置を一度だけ記録して表示
+    updateOriginTime(lastPlaybackTimeRef.current);
+  }, [isFineSeekActiveRef, onKeepControlsOpen, updateOriginTime]);
 
   const handleFineBarChange = useCallback(
     (e) => {
