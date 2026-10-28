@@ -141,25 +141,9 @@ export function useFineSeek({
 
     const releasedTime = latestTimeRef.current;
     lastPlaybackTimeRef.current = releasedTime;
-    // 指を離したら元の位置マーカーを非表示にする
+    // 指を離したら元の位置マーカーを非表示にし、現在の再生位置が中心に来るようにレンジを更新
     updateOriginTime(null);
-
-    const dur = durationRef.current || 100;
-    const halfWindow = getFineHalfWindow(dur);
-    const span = Math.min(halfWindow * 2, dur);
-    let min = Math.max(0, fineCenterTimeRef.current - halfWindow);
-    let max = min + span;
-    if (max > dur) {
-      max = dur;
-      min = Math.max(0, max - span);
-    }
-
-    if (
-      (releasedTime - min < halfWindow * 0.3 && min > 0) ||
-      (max - releasedTime < halfWindow * 0.3 && max < dur)
-    ) {
-      updateFineCenter(releasedTime);
-    }
+    updateFineCenter(releasedTime);
 
     if (onRestartControlsTimeout) onRestartControlsTimeout();
   }, [isFineSeekActiveRef, onRestartControlsTimeout, updateFineCenter, updateOriginTime]);
@@ -213,20 +197,13 @@ export function useFineSeek({
       suppressInitialJumpRef.current = false;
       isSeekingRef.current = false;
       isFineSeekActiveRef.current = false;
+      isHoldingFineRef.current = false;
 
       const releasedTime = latestTimeRef.current;
       lastPlaybackTimeRef.current = releasedTime;
-      // 指を離したら元の位置マーカーを非表示にする
+      // 指を離したら元の位置マーカーを非表示にし、現在の再生位置が中心に来るようにレンジを更新
       updateOriginTime(null);
-
-      if (isHoldingFineRef.current) {
-        isHoldingFineRef.current = false;
-        const dur = durationRef.current;
-        const halfWindow = getFineHalfWindow(dur);
-        if (Math.abs(releasedTime - fineCenterTimeRef.current) > halfWindow * 0.7) {
-          updateFineCenter(releasedTime);
-        }
-      }
+      updateFineCenter(releasedTime);
 
       if (onRestartControlsTimeout) onRestartControlsTimeout();
     };
