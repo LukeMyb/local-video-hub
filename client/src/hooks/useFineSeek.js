@@ -3,6 +3,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 // 1時間(3600秒) -> ±5分(300秒, 全幅600秒)、10分(600秒) -> ±1分(60秒, 全幅120秒) となる指数
 const FINE_SCALE_EXPONENT = Math.log(5) / Math.log(6);
 const MIN_HALF_WINDOW = 5; // 最小レンジ ±5秒（全幅10秒）
+const MAX_FINE_LEVELS = 2; // 詳細シークバーは最大2個まで
 
 export const getNextHalfWindow = (parentSpan) => {
   if (!parentSpan || parentSpan <= MIN_HALF_WINDOW * 2) {
@@ -35,7 +36,7 @@ export function useFineSeek({
   onKeepControlsOpen,
   onRestartControlsTimeout,
 }) {
-  // 各階層の [{ halfWindow, centerTime }, ...] （index 0 が1段目、index 1 がその上の2段目...）
+  // 各階層の [{ halfWindow, centerTime }, ...] （最大2段: index 0 が1段目、index 1 が2段目）
   const [fineLevels, setFineLevels] = useState([]);
   const [originTime, setOriginTime] = useState(null);
 
@@ -91,7 +92,13 @@ export function useFineSeek({
   const startLongPressTimer = useCallback(
     (levelIndex) => {
       clearLongPressTimer();
+      // 詳細シークバーは最大2個まで（levelIndex: -1 -> 1個目, 0 -> 2個目）
+      if (levelIndex + 1 >= MAX_FINE_LEVELS) return;
+
       longPressTimerRef.current = setTimeout(() => {
+        // 再生位置が動いている状態なら詳細シークバーを出さない
+        if (!suppressInitialJumpRef.current) return;
+
         const dur = durationRef.current || 0;
         const currentLevels = fineLevelsRef.current;
         const parentSpan =
@@ -99,7 +106,6 @@ export function useFineSeek({
             ? dur
             : (currentLevels[levelIndex]?.halfWindow || 0) * 2;
 
-        // これ以上細かくできない最小レンジに達している場合は追加しない
         if (parentSpan <= MIN_HALF_WINDOW * 2) return;
 
         const nextHalfWindow = getNextHalfWindow(parentSpan);
@@ -152,7 +158,7 @@ export function useFineSeek({
     }
   }, []);
 
-  // levelIndex: -1 = メインシークバー, 0以上 = 各段の詳細シークバー
+  // levelIndex: -1 = メインシークバー, 0 = 1段目の詳細シークバー, 1 = 2段目の詳細シークバー
   const handleBarStart = useCallback(
     (levelIndex, e) => {
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -185,14 +191,19 @@ export function useFineSeek({
         }
         const ratio = (latestTimeRef.current - min) / Math.max(max - min, 0.1);
         const thumbX = rect.left + ratio * rect.width;
-        suppressInitialJumpRef.current = Math.abs(clientX - thumbX) <= 20;
+        suppressInitialJumpRef.current = Math.abs(clientX - thumbX) <= 24;
       } else {
         suppressInitialJumpRef.current = false;
       }
 
-      startLongPressTimer(levelIndex);
+      // 再生位置が動かない判定（現在のツマミ位置付近を押さえている状態）のときだけ長押しタイマーを開始
+      if (suppressInitialJumpRef.current && levelIndex + 1 < MAX_FINE_LEVELS) {
+        startLongPressTimer(levelIndex);
+      } else {
+        clearLongPressTimer();
+      }
     },
-    [isFineSeekActiveRef, onKeepControlsOpen, startLongPressTimer, updateOriginTime]
+    [clearLongPressTimer, isFineSeekActiveRef, onKeepControlsOpen, startLongPressTimer, updateOriginTime]
   );
 
   useEffect(() => {
@@ -231,10 +242,10 @@ export function useFineSeek({
           updateFineLevels(updated);
         }
       } else {
+        // 指を動かして再生位置を動かしている判定になったら長押しタイマーを解除する
         if (Math.abs(clientX - pressStartXRef.current) > 6) {
           suppressInitialJumpRef.current = false;
-          pressStartXRef.current = clientX;
-          startLongPressTimer(activeLevelIndexRef.current);
+          clearLongPressTimer();
         }
       }
     };
@@ -284,7 +295,6 @@ export function useFineSeek({
     isFineSeekActiveRef,
     onRestartControlsTimeout,
     seekTo,
-    startLongPressTimer,
     updateFineLevels,
     updateOriginTime,
   ]);
@@ -294,11 +304,13 @@ export function useFineSeek({
       if (isHoldingSpawnedFineRef.current || suppressInitialJumpRef.current) {
         return;
       }
+      // 再生位置が動いた場合は長押し判定をキャンセル
+      clearLongPressTimer();
       const time = Number(e.target.value);
       latestTimeRef.current = time;
       seekTo(time);
     },
-    [seekTo]
+    [clearLongPressTimer, seekTo]
   );
 
   return {
