@@ -50,7 +50,8 @@ local-video-hub/
 └── scripts/                    # 管理・AIスクリプト
     ├── tagger.py               # タグ抽出・NFO更新スクリプト
     ├── run_tagger.bat          # 対話式タグ付けバッチファイル
-    └── import_favorites.py     # Jellyfinお気に入り移行スクリプト
+    ├── import_favorites.py     # Jellyfinお気に入り移行スクリプト
+    └── run_import_favorites.bat # お気に入り移行用バッチファイル
 ```
 
 - `client/` : ビデオギャラリーを表示するためのReact/Viteアプリケーション。
@@ -135,6 +136,7 @@ Jellyfin上で登録したお気に入りデータをアプリの独自DB（`dat
 ```bash
 python scripts/import_favorites.py
 ```
+`scripts/run_import_favorites.bat` をダブルクリックしても実行できます（仮想環境の起動も自動で行います）。何度実行しても、取り込み済みのファイルはスキップされます。
 
 ### 3. iOSからのワンタップ保存（ショートカット）
 iPhoneからPC（API）へURLを送信し、自動ダウンロードを開始できます。
