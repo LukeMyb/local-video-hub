@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getVideoStreamUrl, toggleFavorite } from '../api/jellyfin';
+import { getVideoStreamUrl } from '../api/jellyfin';
+import { toggleFavorite, getFavorites } from '../api/backend';
 import { useLocalStorage } from './useLocalStorage';
 import { usePinchZoom } from './usePinchZoom';
 import { useFineSeek } from './useFineSeek';
@@ -111,18 +112,27 @@ export function useVideoPlayer(id) {
         const { getVideoInfo } = await import('../api/jellyfin');
         const info = await getVideoInfo(id);
         setFullVideoInfo(info);
+
+        // プレイリスト経由ではない直接アクセスの場合、自前DBからお気に入り状態を確認
+        if (!currentVideo && info?.Path) {
+          const fileName = info.Path.split(/[\\/]/).pop();
+          if (fileName) {
+            const favoriteList = await getFavorites().catch(() => []);
+            setIsFavorite(favoriteList.includes(fileName));
+          }
+        }
       } catch (error) {
         console.error('Failed to fetch video info', error);
       }
     };
     fetchVideoInfo();
-  }, [id]);
+  }, [id, currentVideo]);
 
   const isTrashed = fullVideoInfo?.Path?.includes('/trash/') || fullVideoInfo?.Path?.includes('\\trash\\');
   const videoFileName =
     fullVideoInfo?.Id === id
       ? fullVideoInfo?.Path?.split(/[\\/]/).pop() || fullVideoInfo?.Name || ''
-      : '';
+      : currentVideo?.FileName || '';
 
   const hideVideoLocally = useCallback(() => {
     const hidden = JSON.parse(sessionStorage.getItem('jellyfin_hidden_ids') || '{}');
@@ -222,8 +232,14 @@ export function useVideoPlayer(id) {
 
   // --- アクションハンドラ ---
   const handleToggleFavorite = useCallback(async () => {
+    const targetFileName = videoFileName || currentVideo?.FileName;
+    if (!targetFileName) {
+      alert('ファイル名が取得できないためお気に入りを更新できません');
+      return;
+    }
+
     try {
-      const newStatus = await toggleFavorite(id, isFavorite);
+      const newStatus = await toggleFavorite(targetFileName);
       setIsFavorite(newStatus);
       if (currentVideo && currentVideo.UserData) {
         currentVideo.UserData.IsFavorite = newStatus;
@@ -232,7 +248,7 @@ export function useVideoPlayer(id) {
       console.error(error);
       alert('お気に入りの更新に失敗しました');
     }
-  }, [id, isFavorite, currentVideo]);
+  }, [videoFileName, currentVideo]);
 
   const handlePrev = useCallback(() => {
     if (prevVideo) {

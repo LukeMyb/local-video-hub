@@ -60,6 +60,7 @@ export function VideoGrid({
                 state={{ 
                   playlist: allFilteredVideos.map(v => ({ 
                     Id: v.Id, 
+                    FileName: v.FileName || '',
                     UserData: { IsFavorite: v.UserData?.IsFavorite || false } 
                   })) 
                 }}

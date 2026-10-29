@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getVideos, getLibraries } from '../api/jellyfin';
+import { getFavorites } from '../api/backend';
 import { useLocalStorage } from './useLocalStorage';
 
 export function useVideos() {
@@ -75,7 +76,7 @@ export function useVideos() {
     fetchLibs();
   }, []);
 
-  // 2. 選択されたライブラリが変わるたびに動画を取得
+  // 2. 選択されたライブラリが変わるたびに動画とお気に入りを取得
   useEffect(() => {
     const fetchVideos = async () => {
       setLoading(true);
@@ -87,8 +88,29 @@ export function useVideos() {
       }
 
       try {
-        const data = await getVideos(selectedLibraryId);
-        setVideos(data.Items || []);
+        const [data, favoriteList] = await Promise.all([
+          getVideos(selectedLibraryId),
+          getFavorites().catch((err) => {
+            console.error('Failed to fetch favorites:', err);
+            return [];
+          }),
+        ]);
+
+        const favoriteSet = new Set(favoriteList);
+        const items = (data.Items || []).map((video) => {
+          const fileName = video.Path ? video.Path.split(/[\\/]/).pop() : '';
+          const isFav = fileName ? favoriteSet.has(fileName) : false;
+          return {
+            ...video,
+            FileName: fileName,
+            UserData: {
+              ...video.UserData,
+              IsFavorite: isFav,
+            },
+          };
+        });
+
+        setVideos(items);
       } catch (error) {
         console.error(error);
       }
@@ -269,9 +291,10 @@ export function useVideos() {
       return newArray;
     };
     
-    // History APIのサイズ制限対策として、Idとお気に入り情報だけを残した軽量オブジェクトに変換
+    // History APIのサイズ制限対策として、Idとファイル名・お気に入り情報だけを残した軽量オブジェクトに変換
     const lightweightPlaylist = allFiltered.map(v => ({
       Id: v.Id,
+      FileName: v.FileName || '',
       UserData: { IsFavorite: v.UserData?.IsFavorite || false }
     }));
     

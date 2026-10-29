@@ -10,10 +10,9 @@ export const getVideos = async (libraryId = null) => {
   url.searchParams.append('IncludeItemTypes', 'Movie,Episode,Video');
   // フォルダ階層を無視してすべてのアイテムをフラットに取得する
   url.searchParams.append('Recursive', 'true');
-  // ソート用にDateCreated(追加日時)などを取得する
-  url.searchParams.append('Fields', 'DateCreated,Tags,ImageTags');
+  // ソート用にDateCreated(追加日時)やファイル名照合用にPathなどを取得する
+  url.searchParams.append('Fields', 'DateCreated,Tags,ImageTags,Path');
 
-  // ユーザーIDをパラメータに付与して、お気に入りデータ等を含める
   if (USER_ID) {
     url.searchParams.append('userId', USER_ID);
   }
@@ -29,12 +28,6 @@ export const getVideos = async (libraryId = null) => {
   }
 
   const data = await res.json();
-    
-  // デバッグ用にお気に入りステータスが取得できているか確認
-  if (data.Items && data.Items.length > 0) {
-    console.log('UserData(お気に入り等)の取得確認:', data.Items[0].UserData);
-  }
-
   return data;
 };
 
@@ -83,32 +76,6 @@ export const getImageUrl = (video) => {
 export const getVideoStreamUrl = (itemId) => {
   // static=true を付与してDirect Play（静的ファイル配信）を強制する
   return `${API_URL}/Videos/${itemId}/stream?api_key=${API_KEY}&static=true`;
-};
-
-// お気に入りのトグル処理
-export const toggleFavorite = async (videoId, currentIsFavorite) => {
-  if (!USER_ID) {
-    throw new Error('ユーザーIDが設定されていません');
-  }
-
-  const method = currentIsFavorite ? 'DELETE' : 'POST';
-  
-  // 既存の API_URL と USER_ID を使用してURLを構築
-  const url = new URL(`${API_URL}/Users/${USER_ID}/FavoriteItems/${videoId}`);
-  
-  // 既存の関数と同様にクエリパラメータで api_key を渡す
-  url.searchParams.append('api_key', API_KEY);
-
-  const response = await fetch(url.toString(), {
-    method: method,
-  });
-
-  if (!response.ok) {
-    throw new Error('お気に入りの状態変更に失敗しました');
-  }
-
-  const data = await response.json();
-  return data.IsFavorite; 
 };
 
 // ライブラリの全体スキャン（更新）を強制的にトリガーする

@@ -294,3 +294,57 @@ async def restore_video(request: TrashRestoreRequest):
         logger.info(f"Restored from trash: {src_file} -> {dst_file}")
         
     return {"status": "success", "message": "ファイルを元の場所に復元しました", "target": target_path}
+
+import sqlite3
+
+DATA_DIR = os.path.join(BASE_DIR, "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+DB_PATH = os.path.join(DATA_DIR, "favorites.db")
+
+def init_favorites_db():
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS favorites (
+                filename TEXT PRIMARY KEY,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+
+init_favorites_db()
+
+class FavoriteToggleRequest(BaseModel):
+    filename: str
+    api_key: str
+
+@app.get("/api/favorites")
+async def get_favorites():
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT filename FROM favorites")
+        rows = cursor.fetchall()
+    return {"favorites": [row[0] for row in rows]}
+
+@app.post("/api/favorites/toggle")
+async def toggle_favorite(request: FavoriteToggleRequest):
+    if not SECRET_API_KEY or request.api_key != SECRET_API_KEY:
+        raise HTTPException(status_code=401, detail="APIキーが間違っています")
+
+    filename = os.path.basename(request.filename.replace("\\", "/")).strip()
+    if not filename:
+        raise HTTPException(status_code=400, detail="ファイル名が不正です")
+
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM favorites WHERE filename = ?", (filename,))
+        exists = cursor.fetchone() is not None
+
+        if exists:
+            cursor.execute("DELETE FROM favorites WHERE filename = ?", (filename,))
+            is_favorite = False
+        else:
+            cursor.execute("INSERT INTO favorites (filename) VALUES (?)", (filename,))
+            is_favorite = True
+        conn.commit()
+
+    return {"status": "success", "filename": filename, "is_favorite": is_favorite}

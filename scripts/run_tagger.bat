@@ -50,7 +50,7 @@ echo.
 
 cd /d "%BASE_DIR%"
 call .venv\Scripts\activate
-python tagger\tagger.py "!TARGET_PATH!"
+python scripts\tagger.py "!TARGET_PATH!"
 
 echo.
 echo Done.

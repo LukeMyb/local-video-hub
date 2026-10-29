@@ -40,3 +40,33 @@ export const restoreVideo = async (videoPath) => {
 
   return response.json();
 };
+
+export const getFavorites = async () => {
+  const response = await fetch(`${BACKEND_URL}/api/favorites`);
+  if (!response.ok) {
+    throw new Error('お気に入り一覧の取得に失敗しました');
+  }
+  const data = await response.json();
+  return data.favorites || [];
+};
+
+export const toggleFavorite = async (filename) => {
+  const response = await fetch(`${BACKEND_URL}/api/favorites/toggle`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      filename,
+      api_key: BACKEND_API_KEY,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'お気に入りの状態変更に失敗しました');
+  }
+
+  const data = await response.json();
+  return data.is_favorite;
+};

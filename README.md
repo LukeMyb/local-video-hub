@@ -12,9 +12,10 @@
   - React + Vite 構成の高速なフロントエンド。
   - Tailwind CSS を用いたモダンなUI、PWA (Progressive Web App) 対応。
   - プレイヤー画面から動画を「ゴミ箱 (trash)」へ移動する論理削除機能と、元に戻す復元機能を搭載。Jellyfinのライブラリスキャンとも自動連動。
-- **AI動画タガー (`tagger/`)**
-  - 動画 (`.mp4`) から自動的に複数フレームを抽出し、画像認識AIによってタグを生成。
+- **管理・AIスクリプト (`scripts/`)**
+  - 動画 (`.mp4`) から自動的に複数フレームを抽出し、画像認識AIによってタグを生成（`tagger.py`）。
   - JellyfinやKodiで読み込み可能な `.nfo` ファイルにタグ情報を自動追記。
+  - Jellyfin上のお気に入りデータをアプリ独自のSQLiteデータベース（`data/favorites.db`）へ移行するスクリプト（`import_favorites.py`）を収録。
 
 ---
 
@@ -46,13 +47,15 @@ local-video-hub/
 │   └── inbox/                  # 自動ダウンロードされた動画の初期保存先
 ├── server/                     # バックエンドAPI (FastAPI)
 │   └── main.py                 # APIサーバーのメインスクリプト
-└── tagger/                     # AI動画タグ生成ツール
-    └── tagger.py               # タグ抽出・NFO更新スクリプト
+└── scripts/                    # 管理・AIスクリプト
+    ├── tagger.py               # タグ抽出・NFO更新スクリプト
+    ├── run_tagger.bat          # 対話式タグ付けバッチファイル
+    └── import_favorites.py     # Jellyfinお気に入り移行スクリプト
 ```
 
 - `client/` : ビデオギャラリーを表示するためのReact/Viteアプリケーション。
-- `server/` : 動画ダウンロードリクエストを受け付けるFastAPIバックエンド。
-- `tagger/` : 動画からタグを抽出し、`.nfo` ファイルを編集するPythonスクリプト。
+- `server/` : 動画ダウンロードやお気に入り管理を受け付けるFastAPIバックエンド。
+- `scripts/` : 動画からタグを抽出し `.nfo` ファイルを編集するスクリプトや、お気に入り移行スクリプト。
 - `bin/` : 外部バイナリファイル（`ffmpeg.exe` 等）の配置場所。
 - `config/` : 設定ファイル（`x.com_cookies.txt` 等）の配置場所。
 - `downloads/inbox/` : ダウンロードされた動画の初期保存先。
@@ -118,14 +121,20 @@ npm run build
 対象の動画ファイル単体、または動画が含まれるディレクトリのパスを指定して実行します。
 ```bash
 # ファイル単体の処理
-python tagger/tagger.py "C:\path\to\your\video.mp4"
+python scripts/tagger.py "C:\path\to\your\video.mp4"
 
 # ディレクトリ全体の一括処理
-python tagger/tagger.py "C:\path\to\your\videos_folder"
+python scripts/tagger.py "C:\path\to\your\videos_folder"
 ```
 
 **【便利な実行方法（バッチファイル）】**
-`tagger/run_tagger.bat` をダブルクリックして実行すると、対話式のコマンドプロンプトが起動します。`media/` フォルダ内のライブラリ一覧が表示されるので、処理したいフォルダの番号を入力するだけで、パスの指定や仮想環境の起動を自動で行い、一括タグ付けを開始できます。
+`scripts/run_tagger.bat` をダブルクリックして実行すると、対話式のコマンドプロンプトが起動します。`media/` フォルダ内のライブラリ一覧が表示されるので、処理したいフォルダの番号を入力するだけで、パスの指定や仮想環境の起動を自動で行い、一括タグ付けを開始できます。
+
+**【Jellyfinお気に入りデータの移行】**
+Jellyfin上で登録したお気に入りデータをアプリの独自DB（`data/favorites.db`）へ取り込む場合は、以下のスクリプトを実行します。
+```bash
+python scripts/import_favorites.py
+```
 
 ### 3. iOSからのワンタップ保存（ショートカット）
 iPhoneからPC（API）へURLを送信し、自動ダウンロードを開始できます。
