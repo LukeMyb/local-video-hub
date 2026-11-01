@@ -1,47 +1,82 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  getOrientation,
+  clampColumns,
+  buildColumnsPair,
+  loadColumnsPair,
+  saveColumnsPair,
+} from '../utils/gridColumns';
 
 export function useGridColumns(initialMobile = 3, initialDesktop = 6) {
-  // レスポンシブな初期値の決定
-  const getInitialColumns = () => {
-    const saved = window.localStorage.getItem('jellyfin_gridColumns');
-    if (saved) return parseInt(saved, 10);
-    return window.innerWidth < 768 ? initialMobile : initialDesktop;
-  };
+  // 縦横それぞれの列数を保持する。ユーザーが列数を変えると、もう一方の向きの列数も比率から再計算される
+  const [initial] = useState(() => {
+    const orientation = getOrientation();
+    return { orientation, pair: loadColumnsPair(orientation, initialMobile, initialDesktop) };
+  });
 
-  const [columns, setColumnsState] = useState(getInitialColumns);
+  const orientationRef = useRef(initial.orientation);
+  const pairRef = useRef(initial.pair);
+
+  const [columns, setColumnsState] = useState(() =>
+    clampColumns(initial.pair[initial.orientation], initial.orientation)
+  );
   const columnsRef = useRef(columns);
 
-  const setColumns = (newCols) => {
-    // 画面幅に応じて最小・最大列数を制限
-    const isMobile = window.innerWidth < 768;
-    const minCols = isMobile ? 1 : 4;
-    const maxCols = isMobile ? 6 : 12;
-    
-    // 範囲内に制限
-    const clamped = Math.max(minCols, Math.min(Math.round(newCols), maxCols));
-    if (clamped !== columnsRef.current) {
-      columnsRef.current = clamped;
-      setColumnsState(clamped);
-      window.localStorage.setItem('jellyfin_gridColumns', clamped.toString());
+  const applyColumns = useCallback((cols) => {
+    if (cols !== columnsRef.current) {
+      columnsRef.current = cols;
+      setColumnsState(cols);
     }
-  };
+  }, []);
 
-  // ウィンドウリサイズ時にもし現在の列数が範囲外になっていたら自動補正する
+  // ユーザー操作（ピンチ・ホイール）による列数の変更
+  const setColumns = useCallback((newCols) => {
+    const orientation = orientationRef.current;
+    // 画面の向き・端末に応じて最小・最大列数を制限
+    const clamped = clampColumns(newCols, orientation);
+    if (clamped !== columnsRef.current) {
+      pairRef.current = buildColumnsPair(clamped, orientation);
+      saveColumnsPair(pairRef.current);
+      applyColumns(clamped);
+    }
+  }, [applyColumns]);
+
+  // 画面の回転・ウィンドウリサイズへの対応
   useEffect(() => {
-    const handleResize = () => {
-      const isMobile = window.innerWidth < 768;
-      const minCols = isMobile ? 1 : 4;
-      const maxCols = isMobile ? 6 : 12;
-      
-      if (columnsRef.current > maxCols) {
-        setColumns(maxCols);
-      } else if (columnsRef.current < minCols) {
-        setColumns(minCols);
+    const handleViewportChange = () => {
+      const next = getOrientation();
+
+      if (next !== orientationRef.current) {
+        // 向きが変わったら、保持しているその向き用の列数に切り替える
+        orientationRef.current = next;
+        applyColumns(clampColumns(pairRef.current[next], next));
+        return;
+      }
+
+      // 向きが同じ場合は、現在の列数が範囲外になっていたら自動補正する（PCのウィンドウリサイズ等）
+      const clamped = clampColumns(columnsRef.current, next);
+      if (clamped !== columnsRef.current) {
+        setColumns(clamped);
       }
     };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+
+    window.addEventListener('resize', handleViewportChange);
+    const screenOrientation = window.screen?.orientation;
+    if (screenOrientation) {
+      screenOrientation.addEventListener('change', handleViewportChange);
+    } else {
+      window.addEventListener('orientationchange', handleViewportChange);
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleViewportChange);
+      if (screenOrientation) {
+        screenOrientation.removeEventListener('change', handleViewportChange);
+      } else {
+        window.removeEventListener('orientationchange', handleViewportChange);
+      }
+    };
+  }, [applyColumns, setColumns]);
 
   useEffect(() => {
     // --- PC用: Shift + ホイール ---
@@ -121,7 +156,7 @@ export function useGridColumns(initialMobile = 3, initialDesktop = 6) {
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('touchend', handleTouchEnd);
     };
-  }, []);
+  }, [setColumns]);
 
   return columns;
 }
