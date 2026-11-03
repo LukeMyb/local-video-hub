@@ -24,6 +24,10 @@ function Player() {
     duration,
     showControls,
     isFavorite,
+    volume,
+    isMuted,
+    handleVolumeChange,
+    toggleMute,
     prevVideo,
     nextVideo,
     resetControlsTimeout,
@@ -158,6 +162,8 @@ function Player() {
         currentTime={currentTime}
         duration={duration}
         isFavorite={isFavorite}
+        volume={volume}
+        isMuted={isMuted}
         isLoop={isLoop}
         isMobile={isMobile}
         isFullscreen={isFullscreen}
@@ -170,6 +176,8 @@ function Player() {
         onPrev={handlePrev}
         onNext={handleNext}
         onToggleFavorite={handleToggleFavorite}
+        onVolumeChange={handleVolumeChange}
+        onToggleMute={toggleMute}
         onToggleLoop={toggleLoop}
         onToggleFullscreen={toggleFullscreen}
         onMouseEnter={handleControlsMouseEnter}

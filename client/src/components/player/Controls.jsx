@@ -1,7 +1,8 @@
 // client/src/components/player/Controls.jsx
+import { useRef, useEffect } from 'react';
 import { 
   Play, Pause, SkipBack, SkipForward, Rewind, FastForward,
-  Maximize, Minimize, Repeat, Heart
+  Maximize, Minimize, Repeat, Heart, Volume2, Volume1, VolumeX
 } from 'lucide-react';
 import { formatTime } from '../../utils/formatters';
 import { getLevelBounds } from '../../hooks/useFineSeek';
@@ -12,6 +13,8 @@ export function Controls({
   currentTime,
   duration,
   isFavorite,
+  volume = 100,
+  isMuted = false,
   isLoop,
   isMobile,
   isFullscreen,
@@ -24,6 +27,8 @@ export function Controls({
   onPrev,
   onNext,
   onToggleFavorite,
+  onVolumeChange,
+  onToggleMute,
   onToggleLoop,
   onToggleFullscreen,
   onMouseEnter,
@@ -36,6 +41,43 @@ export function Controls({
     handleBarStart,
     handleBarChange,
   } = fineSeek || {};
+
+  const isDraggingVolumeRef = useRef(false);
+  const volumeBarRef = useRef(null);
+  const onVolumeChangeRef = useRef(onVolumeChange);
+
+  useEffect(() => {
+    onVolumeChangeRef.current = onVolumeChange;
+  }, [onVolumeChange]);
+
+  const updateVolumeFromClientX = (clientX) => {
+    const barEl = volumeBarRef.current;
+    if (!barEl || !onVolumeChangeRef.current) return;
+    const rect = barEl.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const ratio = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+    onVolumeChangeRef.current(Math.round(ratio * 100));
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isDraggingVolumeRef.current) return;
+      updateVolumeFromClientX(e.clientX);
+    };
+    const handleMouseUp = () => {
+      isDraggingVolumeRef.current = false;
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
+  const displayVolume = isMuted ? 0 : volume;
+  const VolumeIcon =
+    displayVolume === 0 ? VolumeX : displayVolume <= 50 ? Volume1 : Volume2;
 
   const safeDuration = duration || 100;
   const originMainPercent =
@@ -203,6 +245,50 @@ export function Controls({
 
         {/* 右側のコントロール群 */}
         <div className="flex items-center gap-4 justify-end">
+          {/* PC専用: 音量ミキサー（お気に入りボタンのすぐ左） */}
+          {!isMobile && (
+            <div
+              className="flex items-center gap-2 mr-1 select-none"
+              onWheel={(e) => {
+                e.stopPropagation();
+                if (onVolumeChange) {
+                  const delta = e.deltaY < 0 ? 5 : -5;
+                  onVolumeChange(displayVolume + delta);
+                }
+              }}
+            >
+              <button
+                type="button"
+                onClick={onToggleMute}
+                className="text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
+                title={displayVolume === 0 ? "ミュート解除" : "ミュート"}
+              >
+                <VolumeIcon size={24} />
+              </button>
+              <div
+                ref={volumeBarRef}
+                className="relative w-24 flex items-center py-2 cursor-pointer"
+                onMouseDown={(e) => {
+                  isDraggingVolumeRef.current = true;
+                  updateVolumeFromClientX(e.clientX);
+                }}
+              >
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={displayVolume}
+                  onChange={(e) => onVolumeChange && onVolumeChange(e.target.value)}
+                  className="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500 pointer-events-none"
+                />
+              </div>
+              <span className="text-zinc-300 text-xs font-mono w-7 text-right">
+                {displayVolume}
+              </span>
+            </div>
+          )}
+
           {/* お気に入りボタン */}
           <button
             onClick={onToggleFavorite}

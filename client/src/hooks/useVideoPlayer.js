@@ -41,6 +41,8 @@ export function useVideoPlayer(id) {
   const [duration, setDuration] = useState(0);
   const [showControls, setShowControls] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [volume, setVolume] = useState(100);
+  const [isMuted, setIsMuted] = useState(false);
 
   const [fullVideoInfo, setFullVideoInfo] = useState(null);
   const [libraries, setLibraries] = useState([]);
@@ -406,14 +408,37 @@ export function useVideoPlayer(id) {
       updateLastPlaybackTime(t);
     }
   }, [updateLastPlaybackTime]);
+  useEffect(() => {
+    if (videoRef.current) {
+      const effectiveVol = isMobile ? 1 : (isMuted ? 0 : Math.min(Math.max(volume, 0), 100) / 100);
+      videoRef.current.volume = effectiveVol;
+      videoRef.current.muted = isMobile ? false : isMuted;
+    }
+  }, [volume, isMuted, isMobile]);
+
+  const handleVolumeChange = useCallback((newVol) => {
+    const clamped = Math.min(Math.max(Math.round(Number(newVol)), 0), 100);
+    setVolume(clamped);
+    if (clamped > 0) {
+      setIsMuted(false);
+    }
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    setIsMuted((prev) => !prev);
+  }, []);
+
   const handleLoadedMetadata = useCallback(() => {
     resetZoom();
     resetFineSeek();
     if (videoRef.current) {
+      const effectiveVol = isMobile ? 1 : (isMuted ? 0 : Math.min(Math.max(volume, 0), 100) / 100);
+      videoRef.current.volume = effectiveVol;
+      videoRef.current.muted = isMobile ? false : isMuted;
       setDuration(videoRef.current.duration);
       updateLastPlaybackTime(videoRef.current.currentTime || 0);
     }
-  }, [resetZoom, resetFineSeek, updateLastPlaybackTime]);
+  }, [resetZoom, resetFineSeek, updateLastPlaybackTime, isMobile, isMuted, volume]);
   
   const handleContainerMouseLeave = useCallback(() => {
     if (isPlaying && !isFineSeekActiveRef.current) {
@@ -442,6 +467,10 @@ export function useVideoPlayer(id) {
     duration,
     showControls,
     isFavorite,
+    volume,
+    isMuted,
+    handleVolumeChange,
+    toggleMute,
     prevVideo,
     nextVideo,
     timeoutRef,
