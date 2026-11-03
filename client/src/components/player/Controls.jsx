@@ -76,7 +76,11 @@ export function Controls({
               {formatTime(min)}
             </span>
 
-            <div className="relative flex-1 flex items-center py-2">
+            <div
+              className="relative flex-1 flex items-center py-2.5 cursor-pointer touch-none"
+              onTouchStart={(e) => handleBarStart(index, e)}
+              onMouseDown={(e) => handleBarStart(index, e)}
+            >
               <input
                 type="range"
                 min={min}
@@ -84,9 +88,7 @@ export function Controls({
                 step={0.1}
                 value={Math.min(Math.max(currentTime, min), max)}
                 onChange={handleBarChange}
-                onTouchStart={(e) => handleBarStart(index, e)}
-                onMouseDown={(e) => handleBarStart(index, e)}
-                className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-400"
+                className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-400 pointer-events-none"
               />
 
               {/* 詳細バー上の元の位置マーカー */}
@@ -114,7 +116,11 @@ export function Controls({
         onContextMenu={(e) => e.preventDefault()}
       >
         <span className="text-white text-sm font-mono">{formatTime(currentTime)}</span>
-        <div className="relative flex-1 flex items-center py-1.5">
+        <div
+          className="relative flex-1 flex items-center py-2.5 cursor-pointer touch-none"
+          onTouchStart={(e) => handleBarStart && handleBarStart(-1, e)}
+          onMouseDown={(e) => handleBarStart && handleBarStart(-1, e)}
+        >
           <input
             type="range"
             min={0}
@@ -122,9 +128,7 @@ export function Controls({
             step="any"
             value={currentTime}
             onChange={handleBarChange || onSeek}
-            onTouchStart={(e) => handleBarStart && handleBarStart(-1, e)}
-            onMouseDown={(e) => handleBarStart && handleBarStart(-1, e)}
-            className="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:h-2 transition-all"
+            className="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:h-2 transition-all pointer-events-none"
           />
 
           {/* メインバー上の元の位置マーカー */}

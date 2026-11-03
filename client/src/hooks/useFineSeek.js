@@ -54,7 +54,7 @@ export function useFineSeek({
   const isHoldingSpawnedFineRef = useRef(false);
   const spawnedHalfWindowRef = useRef(30);
   const isSeekingRef = useRef(false);
-  const suppressInitialJumpRef = useRef(false);
+  const hasDraggedRef = useRef(false);
 
   const pressStartXRef = useRef(0);
   const lastClientXRef = useRef(0);
@@ -89,6 +89,28 @@ export function useFineSeek({
     setOriginTime(time);
   }, []);
 
+  const getBarBounds = useCallback((levelIndex) => {
+    const dur = durationRef.current || 0;
+    if (levelIndex >= 0 && fineLevelsRef.current[levelIndex]) {
+      const lvl = fineLevelsRef.current[levelIndex];
+      return getLevelBounds(lvl.centerTime, lvl.halfWindow, dur);
+    }
+    return { min: 0, max: dur, range: Math.max(dur, 0.1) };
+  }, []);
+
+  const getTimeFromClientX = useCallback(
+    (barEl, levelIndex, clientX) => {
+      const dur = durationRef.current || 0;
+      if (!barEl || dur <= 0) return null;
+      const rect = barEl.getBoundingClientRect();
+      if (rect.width <= 0) return null;
+      const { min, max } = getBarBounds(levelIndex);
+      const ratio = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+      return min + ratio * (max - min);
+    },
+    [getBarBounds]
+  );
+
   const startLongPressTimer = useCallback(
     (levelIndex) => {
       clearLongPressTimer();
@@ -96,8 +118,8 @@ export function useFineSeek({
       if (levelIndex + 1 >= MAX_FINE_LEVELS) return;
 
       longPressTimerRef.current = setTimeout(() => {
-        // 再生位置が動いている状態なら詳細シークバーを出さない
-        if (!suppressInitialJumpRef.current) return;
+        // ドラッグ操作中は詳細シークバーを出さない
+        if (hasDraggedRef.current || !isPressingBarRef.current) return;
 
         const dur = durationRef.current || 0;
         const currentLevels = fineLevelsRef.current;
@@ -114,7 +136,6 @@ export function useFineSeek({
         const center = latestTimeRef.current;
         isHoldingSpawnedFineRef.current = true;
         spawnedHalfWindowRef.current = nextHalfWindow;
-        suppressInitialJumpRef.current = false;
         holdAnchorXRef.current = lastClientXRef.current;
         holdAnchorTimeRef.current = center;
 
@@ -142,7 +163,7 @@ export function useFineSeek({
     activeLevelIndexRef.current = -1;
     isHoldingSpawnedFineRef.current = false;
     isSeekingRef.current = false;
-    suppressInitialJumpRef.current = false;
+    hasDraggedRef.current = false;
     isFineSeekActiveRef.current = false;
     updateOriginTime(null);
     updateFineLevels([]);
@@ -169,6 +190,7 @@ export function useFineSeek({
       activeLevelIndexRef.current = levelIndex;
       isSeekingRef.current = true;
       isHoldingSpawnedFineRef.current = false;
+      hasDraggedRef.current = false;
       isFineSeekActiveRef.current = true;
       pressStartXRef.current = clientX;
       lastClientXRef.current = clientX;
@@ -181,29 +203,38 @@ export function useFineSeek({
       const dur = durationRef.current;
       if (barEl && dur > 0) {
         const rect = barEl.getBoundingClientRect();
-        let min = 0;
-        let max = dur;
-        if (levelIndex >= 0 && fineLevelsRef.current[levelIndex]) {
-          const lvl = fineLevelsRef.current[levelIndex];
-          const bounds = getLevelBounds(lvl.centerTime, lvl.halfWindow, dur);
-          min = bounds.min;
-          max = bounds.max;
-        }
+        const { min, max } = getBarBounds(levelIndex);
         const ratio = (latestTimeRef.current - min) / Math.max(max - min, 0.1);
         const thumbX = rect.left + ratio * rect.width;
-        suppressInitialJumpRef.current = Math.abs(clientX - thumbX) <= 24;
-      } else {
-        suppressInitialJumpRef.current = false;
+        const isNearThumb = Math.abs(clientX - thumbX) <= 14;
+
+        // 円（ツマミ）以外の場所を押した場合も、即座にその位置へシークしてそこからドラッグ可能にする
+        if (!isNearThumb) {
+          const targetTime = getTimeFromClientX(barEl, levelIndex, clientX);
+          if (targetTime !== null) {
+            latestTimeRef.current = targetTime;
+            seekTo(targetTime);
+          }
+        }
       }
 
-      // 再生位置が動かない判定（現在のツマミ位置付近を押さえている状態）のときだけ長押しタイマーを開始
-      if (suppressInitialJumpRef.current && levelIndex + 1 < MAX_FINE_LEVELS) {
+      // 押さえたまま指を動かさずにホールドした場合は詳細シークバーを表示
+      if (levelIndex + 1 < MAX_FINE_LEVELS) {
         startLongPressTimer(levelIndex);
       } else {
         clearLongPressTimer();
       }
     },
-    [clearLongPressTimer, isFineSeekActiveRef, onKeepControlsOpen, startLongPressTimer, updateOriginTime]
+    [
+      clearLongPressTimer,
+      getBarBounds,
+      getTimeFromClientX,
+      isFineSeekActiveRef,
+      onKeepControlsOpen,
+      seekTo,
+      startLongPressTimer,
+      updateOriginTime,
+    ]
   );
 
   useEffect(() => {
@@ -242,10 +273,21 @@ export function useFineSeek({
           updateFineLevels(updated);
         }
       } else {
-        // 指を動かして再生位置を動かしている判定になったら長押しタイマーを解除する
-        if (Math.abs(clientX - pressStartXRef.current) > 6) {
-          suppressInitialJumpRef.current = false;
+        if (!hasDraggedRef.current) {
+          if (Math.abs(clientX - pressStartXRef.current) <= 6) {
+            return;
+          }
+          hasDraggedRef.current = true;
           clearLongPressTimer();
+        }
+
+        // 円以外の位置からドラッグを開始した場合でも指の位置に追従してシークする
+        const barEl = activeBarElementRef.current;
+        const levelIndex = activeLevelIndexRef.current;
+        const newTime = getTimeFromClientX(barEl, levelIndex, clientX);
+        if (newTime !== null) {
+          latestTimeRef.current = newTime;
+          seekTo(newTime);
         }
       }
     };
@@ -256,7 +298,7 @@ export function useFineSeek({
       isPressingBarRef.current = false;
       activeBarElementRef.current = null;
       activeLevelIndexRef.current = -1;
-      suppressInitialJumpRef.current = false;
+      hasDraggedRef.current = false;
       isSeekingRef.current = false;
       isFineSeekActiveRef.current = false;
       isHoldingSpawnedFineRef.current = false;
@@ -292,6 +334,7 @@ export function useFineSeek({
     };
   }, [
     clearLongPressTimer,
+    getTimeFromClientX,
     isFineSeekActiveRef,
     onRestartControlsTimeout,
     seekTo,
@@ -301,10 +344,10 @@ export function useFineSeek({
 
   const handleBarChange = useCallback(
     (e) => {
-      if (isHoldingSpawnedFineRef.current || suppressInitialJumpRef.current) {
+      // ポインタ／タッチ操作中は handleBarStart / handleMove 側で座標から直接シークを制御する
+      if (isPressingBarRef.current || isHoldingSpawnedFineRef.current) {
         return;
       }
-      // 再生位置が動いた場合は長押し判定をキャンセル
       clearLongPressTimer();
       const time = Number(e.target.value);
       latestTimeRef.current = time;
