@@ -41,8 +41,8 @@ export function useVideoPlayer(id) {
   const [duration, setDuration] = useState(0);
   const [showControls, setShowControls] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
-  const [volume, setVolume] = useState(100);
-  const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useLocalStorage('jellyfin_volume', 100);
+  const [isMuted, setIsMuted] = useLocalStorage('jellyfin_isMuted', false);
 
   const [fullVideoInfo, setFullVideoInfo] = useState(null);
   const [libraries, setLibraries] = useState([]);
@@ -422,11 +422,11 @@ export function useVideoPlayer(id) {
     if (clamped > 0) {
       setIsMuted(false);
     }
-  }, []);
+  }, [setVolume, setIsMuted]);
 
   const toggleMute = useCallback(() => {
     setIsMuted((prev) => !prev);
-  }, []);
+  }, [setIsMuted]);
 
   const handleLoadedMetadata = useCallback(() => {
     resetZoom();
