@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Trash, Undo } from 'lucide-react';
+import { ArrowLeft, Forward, Trash, Undo } from 'lucide-react';
 import { Controls } from '../components/player/Controls';
+import { MoveModal } from '../components/player/MoveModal';
 import { useVideoPlayer } from '../hooks/useVideoPlayer';
 
 function Player() {
@@ -46,6 +47,12 @@ function Player() {
     isTrashed,
     handleTrashVideo,
     handleRestoreVideo,
+    isMoveModalOpen,
+    movableLibraries,
+    currentLibraryName,
+    handleOpenMoveModal,
+    handleCloseMoveModal,
+    handleMoveVideo,
     fineSeek
   } = useVideoPlayer(id);
 
@@ -92,16 +99,34 @@ function Player() {
               <Undo size={24} />
             </button>
           ) : (
-            <button
-              onClick={handleTrashVideo}
-              className="px-4 py-2 text-zinc-300 hover:text-red-400 hover:bg-zinc-800/80 rounded-full transition-colors flex items-center justify-center"
-              title="ゴミ箱へ移動（論理削除）"
-            >
-              <Trash size={24} />
-            </button>
+            <>
+              <button
+                onClick={handleOpenMoveModal}
+                className="px-4 py-2 text-zinc-300 hover:text-white hover:bg-zinc-800/80 rounded-full transition-colors flex items-center justify-center"
+                title="別のライブラリへ移動"
+              >
+                <Forward size={24} />
+              </button>
+              <button
+                onClick={handleTrashVideo}
+                className="px-4 py-2 text-zinc-300 hover:text-red-400 hover:bg-zinc-800/80 rounded-full transition-colors flex items-center justify-center"
+                title="ゴミ箱へ移動（論理削除）"
+              >
+                <Trash size={24} />
+              </button>
+            </>
           )}
         </div>
       </div>
+
+      {/* 別のライブラリへ移動するモーダル */}
+      <MoveModal
+        isOpen={isMoveModalOpen}
+        onClose={handleCloseMoveModal}
+        libraries={movableLibraries}
+        currentLibraryName={currentLibraryName}
+        onSelectLibrary={handleMoveVideo}
+      />
 
       {/* Videoプレイヤー */}
       <video 

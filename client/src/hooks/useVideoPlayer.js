@@ -1,7 +1,18 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getVideoStreamUrl } from '../api/jellyfin';
-import { toggleFavorite, getFavorites } from '../api/backend';
+import {
+  getVideoStreamUrl,
+  getVideoInfo,
+  getLibraries,
+  refreshLibrary,
+} from '../api/jellyfin';
+import {
+  toggleFavorite,
+  getFavorites,
+  trashVideo,
+  restoreVideo,
+  moveVideo,
+} from '../api/backend';
 import { useLocalStorage } from './useLocalStorage';
 import { usePinchZoom } from './usePinchZoom';
 import { useFineSeek } from './useFineSeek';
@@ -9,7 +20,7 @@ import { useFineSeek } from './useFineSeek';
 export function useVideoPlayer(id) {
   const navigate = useNavigate();
   const location = useLocation();
-  const playlist = location.state?.playlist || [];
+  const playlist = useMemo(() => location.state?.playlist || [], [location.state]);
 
   const videoUrl = getVideoStreamUrl(id);
 
@@ -22,6 +33,7 @@ export function useVideoPlayer(id) {
   const { scale, position, isGestureRef, resetZoom } = usePinchZoom(containerRef);
 
   const [isLoop, setIsLoop] = useLocalStorage('jellyfin_isLoop', false);
+  const [libraryHistory] = useLocalStorage('jellyfin_libraryHistory', []);
   const [isMobile, setIsMobile] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
@@ -31,6 +43,8 @@ export function useVideoPlayer(id) {
   const [isFavorite, setIsFavorite] = useState(false);
 
   const [fullVideoInfo, setFullVideoInfo] = useState(null);
+  const [libraries, setLibraries] = useState([]);
+  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
 
   const seekTo = useCallback(
     (time) => {
@@ -91,6 +105,12 @@ export function useVideoPlayer(id) {
   }, []);
 
   useEffect(() => {
+    getLibraries()
+      .then((data) => setLibraries(data.Items || []))
+      .catch((error) => console.error('Failed to fetch libraries', error));
+  }, []);
+
+  useEffect(() => {
     document.body.classList.remove('bg-zinc-900');
     document.body.classList.add('bg-black');
     return () => {
@@ -109,7 +129,6 @@ export function useVideoPlayer(id) {
   useEffect(() => {
     const fetchVideoInfo = async () => {
       try {
-        const { getVideoInfo } = await import('../api/jellyfin');
         const info = await getVideoInfo(id);
         setFullVideoInfo(info);
 
@@ -134,19 +153,82 @@ export function useVideoPlayer(id) {
       ? fullVideoInfo?.Path?.split(/[\\/]/).pop() || fullVideoInfo?.Name || ''
       : currentVideo?.FileName || '';
 
+  const currentLibraryName = useMemo(() => {
+    if (fullVideoInfo?.Id !== id || !fullVideoInfo?.Path) return '';
+    const parts = fullVideoInfo.Path.split(/[\\/]/);
+    const mediaIndex = parts.findIndex((p) => p.toLowerCase() === 'media');
+    if (mediaIndex !== -1 && mediaIndex + 1 < parts.length - 1) {
+      return parts[mediaIndex + 1];
+    }
+    return parts.length >= 2 ? parts[parts.length - 2] : '';
+  }, [fullVideoInfo, id]);
+
+  const movableLibraries = useMemo(() => {
+    if (!libraries || libraries.length === 0) return [];
+    const history = Array.isArray(libraryHistory) ? libraryHistory : [];
+    return libraries
+      .filter((lib) => {
+        const name = lib.Name || '';
+        if (name.toLowerCase() === 'trash') return false;
+        if (currentLibraryName && name.toLowerCase() === currentLibraryName.toLowerCase()) {
+          return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        const indexA = history.indexOf(a.Id);
+        const indexB = history.indexOf(b.Id);
+        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+        if (indexA !== -1) return -1;
+        if (indexB !== -1) return 1;
+        return (a.Name || '').localeCompare(b.Name || '');
+      });
+  }, [libraries, libraryHistory, currentLibraryName]);
+
   const hideVideoLocally = useCallback(() => {
     const hidden = JSON.parse(sessionStorage.getItem('jellyfin_hidden_ids') || '{}');
     hidden[id] = Date.now();
     sessionStorage.setItem('jellyfin_hidden_ids', JSON.stringify(hidden));
   }, [id]);
 
+  const handleOpenMoveModal = useCallback(() => {
+    setIsMoveModalOpen(true);
+  }, []);
+
+  const handleCloseMoveModal = useCallback(() => {
+    setIsMoveModalOpen(false);
+  }, []);
+
+  const handleMoveVideo = useCallback(
+    async (targetLibraryName) => {
+      if (!fullVideoInfo?.Path || !targetLibraryName) return;
+      if (!window.confirm(`この動画を「${targetLibraryName}」に移動しますか？`)) return;
+
+      try {
+        await moveVideo(fullVideoInfo.Path, targetLibraryName);
+
+        // 移動完了後、Jellyfinにライブラリスキャンを要求
+        await refreshLibrary().catch((e) => console.error(e));
+
+        setIsMoveModalOpen(false);
+        hideVideoLocally();
+        // ホーム画面での動画再取得を1.5秒遅延させるフラグを立てる
+        sessionStorage.setItem('jellyfin_delay_fetch', 'true');
+        alert(`「${targetLibraryName}」に移動しました。`);
+        navigate('/');
+      } catch (error) {
+        console.error(error);
+        alert(`エラー: ${error.message}`);
+      }
+    },
+    [fullVideoInfo, hideVideoLocally, navigate]
+  );
+
   const handleTrashVideo = useCallback(async () => {
     if (!fullVideoInfo?.Path) return;
     if (!window.confirm('この動画をゴミ箱に移動しますか？')) return;
     
     try {
-      const { trashVideo } = await import('../api/backend');
-      const { refreshLibrary } = await import('../api/jellyfin');
       await trashVideo(fullVideoInfo.Path);
       
       // 移動完了後、Jellyfinにライブラリスキャンを要求
@@ -168,8 +250,6 @@ export function useVideoPlayer(id) {
     if (!window.confirm('この動画を元の場所に復元しますか？')) return;
     
     try {
-      const { restoreVideo } = await import('../api/backend');
-      const { refreshLibrary } = await import('../api/jellyfin');
       await restoreVideo(fullVideoInfo.Path);
       
       // 復元完了後、Jellyfinにライブラリスキャンを要求
@@ -252,6 +332,7 @@ export function useVideoPlayer(id) {
 
   const handlePrev = useCallback(() => {
     if (prevVideo) {
+      setIsMoveModalOpen(false);
       resetZoom();
       resetFineSeek();
       navigate(`/player/${prevVideo.Id}`, { state: { playlist } });
@@ -260,6 +341,7 @@ export function useVideoPlayer(id) {
 
   const handleNext = useCallback(() => {
     if (nextVideo) {
+      setIsMoveModalOpen(false);
       resetZoom();
       resetFineSeek();
       navigate(`/player/${nextVideo.Id}`, { state: { playlist } });
@@ -383,6 +465,12 @@ export function useVideoPlayer(id) {
     isTrashed,
     handleTrashVideo,
     handleRestoreVideo,
+    isMoveModalOpen,
+    movableLibraries,
+    currentLibraryName,
+    handleOpenMoveModal,
+    handleCloseMoveModal,
+    handleMoveVideo,
     handleControlsMouseEnter,
     fineSeek,
   };

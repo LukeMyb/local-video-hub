@@ -41,6 +41,27 @@ export const restoreVideo = async (videoPath) => {
   return response.json();
 };
 
+export const moveVideo = async (videoPath, targetLibrary) => {
+  const response = await fetch(`${BACKEND_URL}/api/videos/move`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      video_path: videoPath,
+      target_library: targetLibrary,
+      api_key: BACKEND_API_KEY,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || '動画の移動に失敗しました');
+  }
+
+  return response.json();
+};
+
 export const getFavorites = async () => {
   const response = await fetch(`${BACKEND_URL}/api/favorites`);
   if (!response.ok) {

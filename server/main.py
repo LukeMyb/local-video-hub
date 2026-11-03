@@ -295,6 +295,71 @@ async def restore_video(request: TrashRestoreRequest):
         
     return {"status": "success", "message": "ファイルを元の場所に復元しました", "target": target_path}
 
+class MoveVideoRequest(BaseModel):
+    video_path: str
+    target_library: str
+    api_key: str
+
+@app.post("/api/videos/move")
+async def move_video(request: MoveVideoRequest):
+    if not SECRET_API_KEY or request.api_key != SECRET_API_KEY:
+        raise HTTPException(status_code=401, detail="APIキーが間違っています")
+
+    video_path = os.path.normpath(request.video_path)
+
+    # 存在確認
+    if not os.path.exists(video_path):
+        raise HTTPException(status_code=404, detail="ファイルが見つかりません")
+
+    # パスがmediaディレクトリ以下か確認
+    norm_media = os.path.normpath(MEDIA_DIR)
+    if not os.path.normcase(video_path).startswith(os.path.normcase(norm_media + os.sep)):
+        raise HTTPException(status_code=400, detail="対象ファイルがメディアディレクトリ外です")
+
+    # trash以下でないか確認
+    norm_trash = os.path.normpath(TRASH_DIR)
+    if os.path.normcase(video_path).startswith(os.path.normcase(norm_trash + os.sep)):
+        raise HTTPException(status_code=400, detail="ゴミ箱内のファイルは移動できません")
+
+    # 移動先ライブラリ名の検証（パストラバーサル防止）
+    target_library = request.target_library.strip()
+    if (
+        not target_library
+        or "/" in target_library
+        or "\\" in target_library
+        or target_library in (".", "..")
+        or target_library.lower() == "trash"
+    ):
+        raise HTTPException(status_code=400, detail="移動先ライブラリ名が不正です")
+
+    target_dir = os.path.normpath(os.path.join(MEDIA_DIR, target_library))
+    if not os.path.isdir(target_dir):
+        raise HTTPException(status_code=404, detail="移動先のライブラリフォルダが存在しません")
+
+    if os.path.normcase(os.path.dirname(video_path)) == os.path.normcase(target_dir):
+        raise HTTPException(status_code=400, detail="既に同じライブラリ内に存在します")
+
+    # 関連ファイルを探して同名ファイルの衝突を事前確認
+    related_files = get_related_files(video_path)
+    for f in related_files:
+        dst_file = os.path.join(target_dir, f.name)
+        if os.path.exists(dst_file):
+            raise HTTPException(status_code=400, detail=f"移動先に同名のファイルが既に存在します: {f.name}")
+
+    # 関連ファイル一式を移動
+    for f in related_files:
+        src_file = str(f)
+        dst_file = os.path.join(target_dir, f.name)
+        shutil.move(src_file, dst_file)
+        logger.info(f"Moved to library ({target_library}): {src_file} -> {dst_file}")
+
+    target_path = os.path.join(target_dir, os.path.basename(video_path))
+    return {
+        "status": "success",
+        "message": f"ファイルを「{target_library}」に移動しました",
+        "target": target_path,
+    }
+
 import sqlite3
 
 DATA_DIR = os.path.join(BASE_DIR, "data")
