@@ -77,6 +77,30 @@ export function useVideos() {
   }, []);
 
   // 2. 選択されたライブラリが変わるたびに動画とお気に入りを取得
+  const loadVideosData = useCallback(async (libraryId) => {
+    const [data, favoriteList] = await Promise.all([
+      getVideos(libraryId),
+      getFavorites().catch((err) => {
+        console.error('Failed to fetch favorites:', err);
+        return [];
+      }),
+    ]);
+
+    const favoriteSet = new Set(favoriteList);
+    return (data.Items || []).map((video) => {
+      const fileName = video.Path ? video.Path.split(/[\\/]/).pop() : '';
+      const isFav = fileName ? favoriteSet.has(fileName) : false;
+      return {
+        ...video,
+        FileName: fileName,
+        UserData: {
+          ...video.UserData,
+          IsFavorite: isFav,
+        },
+      };
+    });
+  }, []);
+
   useEffect(() => {
     const fetchVideos = async () => {
       setLoading(true);
@@ -88,28 +112,7 @@ export function useVideos() {
       }
 
       try {
-        const [data, favoriteList] = await Promise.all([
-          getVideos(selectedLibraryId),
-          getFavorites().catch((err) => {
-            console.error('Failed to fetch favorites:', err);
-            return [];
-          }),
-        ]);
-
-        const favoriteSet = new Set(favoriteList);
-        const items = (data.Items || []).map((video) => {
-          const fileName = video.Path ? video.Path.split(/[\\/]/).pop() : '';
-          const isFav = fileName ? favoriteSet.has(fileName) : false;
-          return {
-            ...video,
-            FileName: fileName,
-            UserData: {
-              ...video.UserData,
-              IsFavorite: isFav,
-            },
-          };
-        });
-
+        const items = await loadVideosData(selectedLibraryId);
         setVideos(items);
       } catch (error) {
         console.error(error);
@@ -117,7 +120,29 @@ export function useVideos() {
       setLoading(false);
     };
     fetchVideos();
-  }, [selectedLibraryId]);
+  }, [selectedLibraryId, loadVideosData]);
+
+  // グリッドの手動再読み込み
+  const reloadVideos = useCallback(async () => {
+    setLoading(true);
+    sessionStorage.removeItem('jellyfin_hidden_ids');
+    try {
+      const [items, libData] = await Promise.all([
+        loadVideosData(selectedLibraryId),
+        getLibraries().catch((err) => {
+          console.error(err);
+          return null;
+        }),
+      ]);
+      setVideos(items);
+      if (libData?.Items) {
+        setLibraries(libData.Items);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+    setLoading(false);
+  }, [selectedLibraryId, loadVideosData]);
 
   // 3. フィルターやライブラリが変わった時のリセット処理
   useEffect(() => {
@@ -326,6 +351,7 @@ export function useVideos() {
     sortOrder,
     toggleSortOrder,
     handleRandomPlay,
+    reloadVideos,
     scrollToTopBtnRef
   };
 }
