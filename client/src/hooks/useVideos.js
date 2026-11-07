@@ -21,7 +21,6 @@ export function useVideos() {
 
   // UIの状態
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isControlBarVisible, setIsControlBarVisible] = useState(true);
   
   // 無限スクロール用の表示件数
   const [displayCount, setDisplayCount] = useState(() => {
@@ -172,31 +171,15 @@ export function useVideos() {
     }
   }, [loading]);
 
-  // 5. スクロール検知（コントロールバーと上に戻るボタンの制御）
+  // 5. スクロール検知（上に戻るボタンの制御：300pxより下かつ上スクロール時のみ表示）
   useEffect(() => {
     let lastScrollY = window.scrollY;
+    let isScrollingUp = false;
     let ticking = false;
 
-    const handleScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          const currentScrollY = window.scrollY;
-          
-          if (currentScrollY < lastScrollY) {
-            setIsControlBarVisible(true);
-          } else if (currentScrollY > lastScrollY && currentScrollY > 50) {
-            setIsControlBarVisible(false);
-          }
-          lastScrollY = currentScrollY;
-          ticking = false;
-        });
-        ticking = true;
-      }
-    };
-
-    const handleScrollTopBtn = () => {
+    const updateScrollTopBtn = (show) => {
       if (!scrollToTopBtnRef.current) return;
-      if (window.scrollY > 300) {
+      if (show) {
         scrollToTopBtnRef.current.style.opacity = "1";
         scrollToTopBtnRef.current.style.pointerEvents = "auto";
         scrollToTopBtnRef.current.style.transform = "translateY(0)";
@@ -207,12 +190,30 @@ export function useVideos() {
       }
     };
 
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentScrollY = window.scrollY;
+
+          if (currentScrollY < lastScrollY) {
+            isScrollingUp = true;
+          } else if (currentScrollY > lastScrollY) {
+            isScrollingUp = false;
+          }
+
+          updateScrollTopBtn(currentScrollY > 300 && isScrollingUp);
+
+          lastScrollY = currentScrollY;
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
     window.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('scroll', handleScrollTopBtn, { passive: true });
     
     return () => {
       window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('scroll', handleScrollTopBtn);
     };
   }, []);
 
@@ -377,7 +378,6 @@ export function useVideos() {
     displayed,
     handleLoadMore,
     handleVideoClick,
-    isControlBarVisible,
     sortOrder,
     toggleSortOrder,
     handleShuffle,

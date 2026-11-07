@@ -24,7 +24,6 @@ function Home() {
     displayed,
     handleLoadMore,
     handleVideoClick,
-    isControlBarVisible,
     sortOrder,
     toggleSortOrder,
     handleShuffle,
@@ -97,7 +96,6 @@ function Home() {
       
       {/* ControlBar */}
       <ControlBar 
-        isControlBarVisible={isControlBarVisible}
         sortOrder={sortOrder}
         onToggleSortOrder={toggleSortOrder}
         onShuffle={handleShuffle}

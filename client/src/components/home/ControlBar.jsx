@@ -1,7 +1,6 @@
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Shuffle, ArrowUp } from 'lucide-react';
 
 export function ControlBar({
-  isControlBarVisible,
   sortOrder,
   onToggleSortOrder,
   onShuffle,
@@ -12,11 +11,7 @@ export function ControlBar({
   return (
     <>
       {/* ピル型のフローティングコントロールバー */}
-      <div 
-        className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-max max-w-[95vw] transition-all duration-300 ease-in-out ${
-          isControlBarVisible ? "translate-y-0 opacity-100" : "translate-y-20 opacity-0 pointer-events-none"
-        }`}
-      >
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-max max-w-[95vw]">
         <div className="bg-zinc-800/90 backdrop-blur-md border border-zinc-700 shadow-2xl rounded-full px-1.5 py-1.5 flex flex-row items-center gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide">
           
           {/* ソート順変更トグルボタン */}
