@@ -27,6 +27,7 @@ function Home() {
     isControlBarVisible,
     sortOrder,
     toggleSortOrder,
+    handleShuffle,
     handleRandomPlay,
     reloadVideos,
     scrollToTopBtnRef
@@ -99,6 +100,7 @@ function Home() {
         isControlBarVisible={isControlBarVisible}
         sortOrder={sortOrder}
         onToggleSortOrder={toggleSortOrder}
+        onShuffle={handleShuffle}
         onRandomPlay={handleRandomPlay}
         scrollToTopBtnRef={scrollToTopBtnRef}
         onScrollToTop={() => window.scrollTo({ top: 0, behavior: "smooth" })}

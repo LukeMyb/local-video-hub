@@ -15,6 +15,8 @@ export function useVideos() {
   const [isFavoriteFilter, setIsFavoriteFilter] = useLocalStorage('jellyfin_isFavorite', false);
   const [selectedLibraryId, setSelectedLibraryId] = useLocalStorage('jellyfin_libraryId', null);
   const [sortOrder, setSortOrder] = useLocalStorage('jellyfin_sortOrder', 'desc');
+  const [isShuffled, setIsShuffled] = useLocalStorage('jellyfin_isShuffled', false);
+  const [shuffleSeed, setShuffleSeed] = useLocalStorage('jellyfin_shuffleSeed', 1);
   const [libraryHistory, setLibraryHistory] = useLocalStorage('jellyfin_libraryHistory', []);
 
   // UIの状態
@@ -259,17 +261,33 @@ export function useVideos() {
       });
     }
 
-    filtered.sort((a, b) => {
-      const dateA = new Date(a.DateCreated || 0).getTime();
-      const dateB = new Date(b.DateCreated || 0).getTime();
-      return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
-    });
+    if (isShuffled) {
+      filtered.sort((a, b) => String(a.Id).localeCompare(String(b.Id)));
+      let a = (shuffleSeed || 1) >>> 0;
+      const nextRandom = () => {
+        a |= 0;
+        a = (a + 0x6d2b79f5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+      for (let i = filtered.length - 1; i > 0; i--) {
+        const j = Math.floor(nextRandom() * (i + 1));
+        [filtered[i], filtered[j]] = [filtered[j], filtered[i]];
+      }
+    } else {
+      filtered.sort((a, b) => {
+        const dateA = new Date(a.DateCreated || 0).getTime();
+        const dateB = new Date(b.DateCreated || 0).getTime();
+        return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+      });
+    }
 
     return {
       allFiltered: filtered,
       displayed: filtered.slice(0, displayCount)
     };
-  }, [videos, sortOrder, isFavoriteFilter, displayCount, searchQuery]);
+  }, [videos, sortOrder, isShuffled, shuffleSeed, isFavoriteFilter, displayCount, searchQuery]);
 
   // --- イベントハンドラ ---
 
@@ -281,11 +299,23 @@ export function useVideos() {
   }, [setSearchQuery]);
 
   const toggleSortOrder = useCallback(() => {
-    setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'));
+    if (isShuffled) {
+      setIsShuffled(false);
+    } else {
+      setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'));
+    }
     setDisplayCount(100);
     sessionStorage.setItem('jellyfin_displayCount', '100');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [setSortOrder]);
+  }, [isShuffled, setIsShuffled, setSortOrder]);
+
+  const handleShuffle = useCallback(() => {
+    setIsShuffled(true);
+    setShuffleSeed((prev) => ((prev + Math.floor(Math.random() * 0x7fffffff) + 1) >>> 0) || 1);
+    setDisplayCount(100);
+    sessionStorage.setItem('jellyfin_displayCount', '100');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [setIsShuffled, setShuffleSeed]);
 
   const handleLoadMore = useCallback(() => {
     setDisplayCount((prev) => {
@@ -350,6 +380,7 @@ export function useVideos() {
     isControlBarVisible,
     sortOrder,
     toggleSortOrder,
+    handleShuffle,
     handleRandomPlay,
     reloadVideos,
     scrollToTopBtnRef
