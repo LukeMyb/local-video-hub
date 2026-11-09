@@ -113,8 +113,13 @@ function Player() {
               </button>
               <button
                 onClick={handleTrashVideo}
-                className="px-4 py-2 text-zinc-300 hover:text-red-400 hover:bg-zinc-800/80 rounded-full transition-colors flex items-center justify-center"
-                title="ゴミ箱へ移動（論理削除）"
+                disabled={isFavorite}
+                className={`px-4 py-2 rounded-full transition-colors flex items-center justify-center ${
+                  isFavorite
+                    ? 'text-zinc-600 cursor-not-allowed'
+                    : 'text-zinc-300 hover:text-red-400 hover:bg-zinc-800/80'
+                }`}
+                title={isFavorite ? "お気に入り登録中はゴミ箱へ移動できません" : "ゴミ箱へ移動（論理削除）"}
               >
                 <Trash size={24} />
               </button>

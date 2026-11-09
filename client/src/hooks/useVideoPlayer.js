@@ -227,7 +227,7 @@ export function useVideoPlayer(id) {
   );
 
   const handleTrashVideo = useCallback(async () => {
-    if (!fullVideoInfo?.Path) return;
+    if (isFavorite || !fullVideoInfo?.Path) return;
     if (!window.confirm('この動画をゴミ箱に移動しますか？')) return;
     
     try {
@@ -245,7 +245,7 @@ export function useVideoPlayer(id) {
       console.error(error);
       alert(`エラー: ${error.message}`);
     }
-  }, [fullVideoInfo, hideVideoLocally, navigate]);
+  }, [isFavorite, fullVideoInfo, hideVideoLocally, navigate]);
 
   const handleRestoreVideo = useCallback(async () => {
     if (!fullVideoInfo?.Path) return;
