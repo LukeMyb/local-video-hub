@@ -14,16 +14,21 @@ export default defineConfig({
         enabled: true
       },
       manifest: {
-        name: 'Custom Player',
-        short_name: 'Player',
+        name: 'Local Video Hub',
+        short_name: 'Video Hub',
         display: 'standalone',
-        background_color: '#000000',
-        theme_color: '#000000',
+        background_color: '#14141c',
+        theme_color: '#aa5cc3',
         icons: [
           {
-            src: '/vite.svg',
+            src: '/icon-192.png',
             sizes: '192x192',
-            type: 'image/svg+xml'
+            type: 'image/png'
+          },
+          {
+            src: '/icon.png',
+            sizes: '512x512',
+            type: 'image/png'
           }
         ]
       }
