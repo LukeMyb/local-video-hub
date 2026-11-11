@@ -17,8 +17,8 @@ export default defineConfig({
         name: 'Local Video Hub',
         short_name: 'Video Hub',
         display: 'standalone',
-        background_color: '#14141c',
-        theme_color: '#aa5cc3',
+        background_color: '#18181b',
+        theme_color: '#18181b',
         icons: [
           {
             src: '/icon-192.png',
