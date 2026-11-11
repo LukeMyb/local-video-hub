@@ -19,6 +19,9 @@
   - 動画 (`.mp4`) から自動的に複数フレームを抽出し、画像認識AIによってタグを生成（`tagger.py`）。
   - JellyfinやKodiで読み込み可能な `.nfo` ファイルにタグ情報を自動追記。
   - Jellyfin上のお気に入りデータをアプリ独自のSQLiteデータベース（`data/favorites.db`）へ移行するスクリプト（`import_favorites.py`）を収録。
+- **タスクトレイ常駐ランチャー (`tray_app.py`)**
+  - Windowsタスクトレイに常駐し、他のPython / Node.jsアプリを巻き込まずにこのツールのバックエンド（ポート `9096`）・フロントエンド（ポート `3096`）のみをピンポイントで起動・停止・再起動可能。
+  - トレイアイコンからワンクリックでのブラウザ起動や、プロジェクトフォルダをVS Codeで開くショートカットを搭載。
 
 ---
 
@@ -26,13 +29,15 @@
 
 ```text
 local-video-hub/
-├── .env                         # バックエンド用環境変数 (API_KEY)
+├── .env                         # バックエンド用環境変数 (API_KEY など)
 ├── README.md                    # このドキュメント
 ├── requirements.txt             # Pythonの依存関係
-├── start_local-video-hub.vbs    # 起動用スクリプト
+├── tray_app.py                  # タスクトレイ常駐ランチャー
+├── start_local-video-hub.vbs    # 起動用スクリプト (tray_app.py を非表示起動)
 ├── bin/
 │   └── ffmpeg.exe               # 動画処理用バイナリ
 ├── client/                      # Webクライアント (React/Vite)
+│   ├── public/                  # 静的ファイル・Favicon・PWA用アイコン一式
 │   ├── src/                     # フロントエンドのソースコード
 │   │   ├── api/                 # API通信用関数 (jellyfin.js, backend.js)
 │   │   ├── assets/              # 静的アセット
@@ -44,7 +49,7 @@ local-video-hub/
 │   │   └── main.jsx             # Reactエントリポイント
 │   ├── .env                     # フロントエンド用環境変数 (Jellyfin / Backend接続設定)
 │   ├── package.json             # Node.jsパッケージ設定
-│   └── vite.config.js           # Vite設定
+│   └── vite.config.js           # Vite・PWA設定
 ├── config/
 │   ├── x.com_cookies.txt        # X (Twitter) 動画ダウンロード用Cookie
 │   └── tiktok.com_cookies.txt   # TikTok 動画ダウンロード用Cookie
@@ -72,7 +77,8 @@ local-video-hub/
 - `data/` : アプリ独自の永続化データ（`favorites.db`）の保存先。
 - `downloads/inbox/` : ダウンロードされた動画の初期保存先。
 - `media/` : 各ライブラリの動画ファイルおよび論理削除用の `trash/` フォルダの配置場所。
-- `start_local-video-hub.vbs` : フロントエンドとバックエンドを同時にバックグラウンド起動するスクリプト。
+- `tray_app.py` : バックエンドとフロントエンドのプロセス管理を行うタスクトレイ常駐ランチャー。
+- `start_local-video-hub.vbs` : `pythonw.exe` 経由で `tray_app.py` をコンソール非表示で起動するスクリプト。
 
 ---
 
@@ -125,11 +131,19 @@ local-video-hub/
 
 ## 使い方 (Usage)
 
-### 1. システムの起動
+### 1. システムの起動（タスクトレイ常駐）
 プロジェクトルートにある `start_local-video-hub.vbs` をダブルクリックします。
-バックグラウンドで自動的に以下の2つが起動します。
-- Webクライアント (ポート: 3096)
-- バックエンドAPI (ポート: 9096)
+タスクトレイに `LocalVideoHub` アイコンが表示され、バックグラウンドで自動的に以下の2つが起動します。
+- Webクライアント (ポート: `3096`)
+- バックエンドAPI (ポート: `9096`)
+
+#### タスクトレイメニューの操作
+トレイアイコンを右クリック（または左クリックでブラウザ起動）すると以下の操作を行えます。
+- **🌐 ブラウザで開く**: デフォルトブラウザでWebクライアントを開きます。
+- **📁 プロジェクトフォルダをVS Codeで開く**: VS Codeでこのプロジェクトを開きます。
+- **⏸ 常駐を停止 / ▶ 常駐を再開**: 他の常駐アプリを巻き込まずに、このツールのサーバープロセスのみを停止・再開します（開発時にターミナルで手動起動したい場合などに便利です）。
+- **🔄 常駐サーバーを再起動**: フロントエンドのビルド（`npm run build`）後など、変更を即座に反映したい時にサーバーを再起動します。
+- **❌ トレイから完全終了**: サーバーを停止し、タスクトレイ常駐ランチャー自体も終了します。
 
 #### PC起動時に自動実行する場合（スタートアップ登録）
 毎回手動で起動するのが手間の場合は、以下の手順でWindowsのスタートアップに登録することをおすすめします。
