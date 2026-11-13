@@ -18,8 +18,9 @@ const gridComponents = {
         display: 'grid',
         // CSS変数を使って列数を動的に受け取る
         gridTemplateColumns: 'repeat(var(--grid-columns, 6), minmax(0, 1fr))',
+        // 画像幅に対する余白の比率を一定に保つ（列数が増えるほど余白も細くなる）
+        gap: 'var(--grid-gap)',
       }}
-      className="gap-2 lg:gap-4"
     >
       {children}
     </div>
@@ -32,6 +33,16 @@ const gridComponents = {
   )
 };
 
+// 画像1枚の幅に対する余白の比率（例: 0.06 → 余白は画像幅の6%）
+const GAP_RATIO = 0.06;
+
+// 列数 n、コンテナ幅 W のとき 画像幅 w と余白 g は
+//   W = n*w + (n-1)*g,  g = GAP_RATIO * w
+// より g = W * GAP_RATIO / (n + (n-1) * GAP_RATIO)
+// 100cqw はコンテナ（container-type: inline-size）のコンテンツ幅
+const getGapStyle = (columns) =>
+  `calc(100cqw * ${GAP_RATIO} / ${columns + (columns - 1) * GAP_RATIO})`;
+
 export function VideoGrid({ 
   loading, 
   allFilteredVideos, 
@@ -40,8 +51,15 @@ export function VideoGrid({
   const columns = useGridColumns();
 
   return (
-    // 親要素のstyleにCSS変数として現在の列数を渡す
-    <div className="p-2 md:p-4 pt-0 flex-1 w-full" style={{ '--grid-columns': columns }}>
+    // 親要素のstyleにCSS変数として現在の列数と余白を渡す
+    <div
+      className="p-2 md:p-4 pt-0 flex-1 w-full"
+      style={{
+        '--grid-columns': columns,
+        '--grid-gap': getGapStyle(columns),
+        containerType: 'inline-size',
+      }}
+    >
       {loading ? (
         <p className="text-zinc-500 text-center mt-8 text-sm">読み込み中...</p>
       ) : (
