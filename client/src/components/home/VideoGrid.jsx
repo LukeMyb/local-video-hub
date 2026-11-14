@@ -36,10 +36,7 @@ const gridComponents = {
 // 画像1枚の幅に対する余白の比率（例: 0.06 → 余白は画像幅の6%）
 const GAP_RATIO = 0.06;
 
-// 列数 n、コンテナ幅 W のとき 画像幅 w と余白 g は
-//   W = n*w + (n-1)*g,  g = GAP_RATIO * w
-// より g = W * GAP_RATIO / (n + (n-1) * GAP_RATIO)
-// 100cqw はコンテナ（container-type: inline-size）のコンテンツ幅
+// コンテナ幅(100cqw)と列数から、画像幅と余白の比率(GAP_RATIO)を維持する余白幅を算出
 const getGapStyle = (columns) =>
   `calc(100cqw * ${GAP_RATIO} / ${columns + (columns - 1) * GAP_RATIO})`;
 

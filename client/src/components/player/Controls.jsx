@@ -1,4 +1,3 @@
-// client/src/components/player/Controls.jsx
 import { useRef, useEffect } from 'react';
 import { 
   Play, Pause, SkipBack, SkipForward, Rewind, FastForward,
@@ -189,7 +188,7 @@ export function Controls({
 
       {/* ボタンエリア */}
       <div className="flex items-center justify-between mt-2">
-        {/* 中央の再生コントロール群 */}
+        {/* 左側の再生コントロール群 */}
         <div className="flex items-center gap-6 sm:gap-8">
           {/* 10秒戻る */}
           <button

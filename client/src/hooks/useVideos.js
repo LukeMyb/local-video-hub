@@ -106,7 +106,7 @@ export function useVideos() {
     const fetchVideos = async () => {
       setLoading(true);
       
-      // プレイヤーから移動・復元して戻ってきた直後の場合、JellyfinのDB登録を待つため少し遅延させる
+      // プレイヤーから移動・削除・復元して戻ってきた直後の場合、JellyfinのDB更新を待つため少し遅延させる
       if (sessionStorage.getItem('jellyfin_delay_fetch')) {
         await new Promise(resolve => setTimeout(resolve, 1500));
         sessionStorage.removeItem('jellyfin_delay_fetch');
@@ -237,7 +237,7 @@ export function useVideos() {
     
     let filtered = [...videos];
 
-    // 直近で論理削除/復元した動画を一時的に非表示にする（15秒間）
+    // 直近で移動・論理削除・復元した動画を一時的に非表示にする（15秒間）
     const hiddenMap = JSON.parse(sessionStorage.getItem('jellyfin_hidden_ids') || '{}');
     const now = Date.now();
     filtered = filtered.filter(video => {

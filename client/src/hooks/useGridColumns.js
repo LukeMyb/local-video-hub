@@ -130,8 +130,6 @@ export function useGridColumns(initialMobile = 3, initialDesktop = 6) {
         
         // ピンチイン（狭める）-> ratio > 1 -> 列を増やす（縮小）
         // ピンチアウト（広げる）-> ratio < 1 -> 列を減らす（拡大）
-        
-        // ratioに応じて列数を計算。少し感度を下げるために倍率を調整することも可能
         const newCols = Math.round(initialColsAtTouchStart * ratio);
         setColumns(newCols);
       }

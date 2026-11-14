@@ -169,7 +169,7 @@ async def download_video(request: VideoRequest, background_tasks: BackgroundTask
 
     logger.info(f"URLを受け取りました: {request.url}")
     
-        # URLによるクッキーの有効性を事前チェック
+    # URLによるクッキーの有効性を事前チェック
     if "x.com" in request.url or "twitter.com" in request.url:
         is_valid, error_msg = check_x_cookie(COOKIE_FILE)
         if not is_valid:

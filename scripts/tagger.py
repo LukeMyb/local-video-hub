@@ -181,7 +181,7 @@ class VideoTagger:
         # 実際に抽出・推論できたフレーム数を取得
         actual_frames = len(conv_probs_list)
 
-        # タグの集計とフレームごとのTXT出力
+        # タグの集計
         tag_counts = {}
         for i in range(actual_frames):
             for tag_idx in range(len(self.tag_names)):
@@ -232,7 +232,6 @@ if __name__ == "__main__":
     if not video_files:
         print("処理対象の動画が見つかりませんでした。")
     else:
-        # \tqdm を使ったプログレス表示
         total_files = len(video_files)
         print(f"合計 {total_files} 件の動画をスキャンします...")
         
