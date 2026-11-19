@@ -10,9 +10,21 @@ import {
   Folder,
   Maximize2,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
-import { getDuplicates, scanDuplicates, getBackendVideoStreamUrl } from '../api/backend';
-import { getVideos, getLibraries, getImageUrl, getVideoStreamUrl } from '../api/jellyfin';
+import {
+  getDuplicates,
+  scanDuplicates,
+  getBackendVideoStreamUrl,
+  resolveDuplicate,
+} from '../api/backend';
+import {
+  getVideos,
+  getLibraries,
+  getImageUrl,
+  getVideoStreamUrl,
+  refreshLibrary,
+} from '../api/jellyfin';
 import { InfoModal } from '../components/player/InfoModal';
 import { formatTime } from '../utils/formatters';
 
@@ -26,8 +38,10 @@ function DuplicateGroupCard({
   group,
   groupIndex,
   jellyfinMap,
+  resolvingRelPath,
   onOpenTags,
   onOpenFullPlayer,
+  onResolveVideo,
 }) {
   const [activePlayers, setActivePlayers] = useState({});
   const [isGroupPlaying, setIsGroupPlaying] = useState(false);
@@ -285,6 +299,28 @@ function DuplicateGroupCard({
                     <span>{video.tag_count}タグ</span>
                   </button>
                 </div>
+
+                {/* 引き継ぎ削除ボタン (Step 4) */}
+                <button
+                  type="button"
+                  disabled={!!resolvingRelPath}
+                  onClick={() => onResolveVideo(group, video)}
+                  className={`mt-1.5 w-full py-2 px-2 rounded-md text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
+                    resolvingRelPath === video.rel_path
+                      ? 'bg-red-900/40 text-red-300 cursor-wait border border-red-800/50'
+                      : resolvingRelPath
+                        ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                        : 'bg-red-950/60 hover:bg-red-900/80 text-red-200 hover:text-white border border-red-800/60'
+                  }`}
+                  title="お気に入りとタグを残す側の動画へ引き継いでからゴミ箱へ移動します"
+                >
+                  <Trash2 size={13} className="shrink-0" />
+                  <span className="truncate">
+                    {resolvingRelPath === video.rel_path
+                      ? '移動中...'
+                      : 'こちらを削除(引継)'}
+                  </span>
+                </button>
               </div>
             </div>
           );
@@ -303,6 +339,7 @@ export default function Duplicates() {
   const [selectedLibrary, setSelectedLibrary] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [resolvingRelPath, setResolvingRelPath] = useState(null);
 
   // Jellyfinアイテムの照合マップ (サムネイル & ストリームURL取得用)
   const [jellyfinItems, setJellyfinItems] = useState([]);
@@ -422,6 +459,60 @@ export default function Duplicates() {
       setTimeout(() => fetchDuplicateData(false), 500);
     } catch (err) {
       alert(`スキャン開始エラー: ${err.message}`);
+    }
+  };
+
+  const handleResolveVideo = async (group, targetVideo) => {
+    const keepVideos = group.videos.filter((v) => v.rel_path !== targetVideo.rel_path);
+    if (keepVideos.length === 0) return;
+
+    const inheritNotes = [];
+    if (targetVideo.is_favorite) {
+      inheritNotes.push('・お気に入り登録状態 (❤️)');
+    }
+    if (targetVideo.tag_count > 0) {
+      inheritNotes.push(`・NFOタグ (${targetVideo.tag_count}個)`);
+    }
+
+    const inheritMessage =
+      inheritNotes.length > 0
+        ? `\n\n以下のデータが残す動画へ自動で引き継がれます：\n${inheritNotes.join('\n')}`
+        : '';
+
+    const confirmed = window.confirm(
+      `[${targetVideo.library}] ${targetVideo.filename}\nをゴミ箱へ移動しますか？${inheritMessage}`
+    );
+    if (!confirmed) return;
+
+    setResolvingRelPath(targetVideo.rel_path);
+    try {
+      await resolveDuplicate({
+        trashRelPath: targetVideo.rel_path,
+        keepRelPaths: keepVideos.map((v) => v.rel_path),
+        mergeMetadata: true,
+      });
+
+      // ホーム画面のキャッシュでも非表示になるようにセッションストレージを更新
+      const jfItem =
+        jellyfinMap.byRelPath.get(targetVideo.rel_path.toLowerCase()) ||
+        jellyfinMap.byFileName.get(targetVideo.filename.toLowerCase());
+      if (jfItem?.Id) {
+        const hidden = JSON.parse(sessionStorage.getItem('jellyfin_hidden_ids') || '{}');
+        hidden[jfItem.Id] = Date.now();
+        sessionStorage.setItem('jellyfin_hidden_ids', JSON.stringify(hidden));
+      }
+      sessionStorage.setItem('jellyfin_delay_fetch', 'true');
+
+      // Jellyfinにライブラリスキャンを非同期で要求
+      refreshLibrary().catch((e) => console.error(e));
+
+      // 最新の一覧を再取得
+      await fetchDuplicateData(false);
+    } catch (err) {
+      console.error(err);
+      alert(`削除（引き継ぎ）エラー: ${err.message}`);
+    } finally {
+      setResolvingRelPath(null);
     }
   };
 
@@ -547,6 +638,7 @@ export default function Duplicates() {
                 group={group}
                 groupIndex={index}
                 jellyfinMap={jellyfinMap}
+                resolvingRelPath={resolvingRelPath}
                 onOpenTags={(filename, tags) =>
                   setTagModalInfo({
                     isOpen: true,
@@ -555,6 +647,7 @@ export default function Duplicates() {
                   })
                 }
                 onOpenFullPlayer={(itemId) => navigate(`/player/${itemId}`)}
+                onResolveVideo={handleResolveVideo}
               />
             ))}
           </div>

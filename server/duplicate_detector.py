@@ -381,6 +381,56 @@ def read_nfo_tags(video_full_path: str) -> list[str]:
         return []
 
 
+def merge_nfo_tags(tags_to_add: list[str], target_video_full_path: str) -> int:
+    """
+    指定したタグ一覧を target_video_full_path に対応する .nfo ファイルにマージ（追記）する。
+    新規追加されたタグの個数を返す。
+    """
+    if not tags_to_add:
+        return 0
+
+    target_nfo_path = os.path.splitext(target_video_full_path)[0] + ".nfo"
+    if os.path.exists(target_nfo_path):
+        try:
+            tree = ET.parse(target_nfo_path)
+            root = tree.getroot()
+        except ET.ParseError:
+            root = ET.Element("movie")
+            tree = ET.ElementTree(root)
+    else:
+        root = ET.Element("movie")
+        tree = ET.ElementTree(root)
+
+    existing_tags = set()
+    for tag_elem in root.findall("tag"):
+        if tag_elem.text and tag_elem.text.strip():
+            existing_tags.add(tag_elem.text.strip())
+
+    added_count = 0
+    for tag in tags_to_add:
+        clean_tag = tag.strip()
+        if clean_tag and clean_tag not in existing_tags:
+            tag_elem = ET.SubElement(root, "tag")
+            tag_elem.text = clean_tag
+            existing_tags.add(clean_tag)
+            added_count += 1
+
+    if added_count > 0:
+        if hasattr(ET, "indent"):
+            ET.indent(tree, space="  ", level=0)
+        tree.write(target_nfo_path, encoding="utf-8", xml_declaration=True)
+
+    return added_count
+
+
+def remove_cached_video_hash(rel_path: str, db_path: str = DB_PATH):
+    """ゴミ箱へ移動した動画のキャッシュレコードを video_hashes から削除する"""
+    norm_rel = rel_path.replace("\\", "/")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("DELETE FROM video_hashes WHERE rel_path = ?", (norm_rel,))
+        conn.commit()
+
+
 def find_duplicate_groups(
     db_path: str = DB_PATH,
     similarity_threshold: float = 0.92,

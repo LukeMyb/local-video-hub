@@ -135,3 +135,29 @@ export const scanDuplicates = async ({ library = null, force = false, runAsync =
 export const getBackendVideoStreamUrl = (relPath) => {
   return `${BACKEND_URL}/api/videos/stream?rel_path=${encodeURIComponent(relPath)}`;
 };
+
+export const resolveDuplicate = async ({
+  trashRelPath,
+  keepRelPaths,
+  mergeMetadata = true,
+}) => {
+  const response = await fetch(`${BACKEND_URL}/api/duplicates/resolve`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      trash_rel_path: trashRelPath,
+      keep_rel_paths: keepRelPaths,
+      merge_metadata: mergeMetadata,
+      api_key: BACKEND_API_KEY,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || '重複動画の削除（引き継ぎ）に失敗しました');
+  }
+
+  return response.json();
+};

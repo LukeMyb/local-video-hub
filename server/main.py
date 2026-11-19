@@ -422,6 +422,10 @@ try:
         scan_and_cache_videos,
         find_duplicate_groups,
         get_cached_video_count,
+        read_nfo_tags,
+        merge_nfo_tags,
+        remove_cached_video_hash,
+        normalize_rel_path,
     )
 except ImportError:
     from duplicate_detector import (
@@ -429,6 +433,10 @@ except ImportError:
         scan_and_cache_videos,
         find_duplicate_groups,
         get_cached_video_count,
+        read_nfo_tags,
+        merge_nfo_tags,
+        remove_cached_video_hash,
+        normalize_rel_path,
     )
 
 init_duplicates_db(DB_PATH)
@@ -560,3 +568,102 @@ async def scan_duplicates(request: DuplicateScanRequest, background_tasks: Backg
             "message": "重複動画のスキャンが完了しました",
             "scan_status": duplicate_scan_state,
         }
+
+
+class DuplicateResolveRequest(BaseModel):
+    trash_rel_path: str
+    keep_rel_paths: list[str]
+    merge_metadata: bool = True
+    api_key: str
+
+
+def _resolve_safe_media_path(rel_or_full_path: str) -> str:
+    """MEDIA_DIR配下（trash除く）の安全なフルパスに変換・検証する"""
+    norm_media = os.path.normpath(MEDIA_DIR)
+    norm_trash = os.path.normpath(TRASH_DIR)
+
+    candidate = os.path.normpath(
+        rel_or_full_path
+        if os.path.isabs(rel_or_full_path)
+        else os.path.join(MEDIA_DIR, rel_or_full_path)
+    )
+    if not os.path.normcase(candidate).startswith(os.path.normcase(norm_media + os.sep)):
+        raise HTTPException(status_code=400, detail="対象ファイルがメディアディレクトリ外です")
+    if os.path.normcase(candidate).startswith(os.path.normcase(norm_trash + os.sep)):
+        raise HTTPException(status_code=400, detail="既にゴミ箱内のファイルです")
+    if not os.path.exists(candidate):
+        raise HTTPException(status_code=404, detail=f"ファイルが見つかりません: {os.path.basename(candidate)}")
+    return candidate
+
+
+@app.post("/api/duplicates/resolve")
+async def resolve_duplicate(request: DuplicateResolveRequest):
+    if not SECRET_API_KEY or request.api_key != SECRET_API_KEY:
+        raise HTTPException(status_code=401, detail="APIキーが間違っています")
+
+    if not request.keep_rel_paths:
+        raise HTTPException(status_code=400, detail="残す動画が指定されていません")
+
+    trash_full_path = _resolve_safe_media_path(request.trash_rel_path)
+    keep_full_paths = []
+    for kp in request.keep_rel_paths:
+        k_full = _resolve_safe_media_path(kp)
+        if os.path.normcase(k_full) == os.path.normcase(trash_full_path):
+            raise HTTPException(status_code=400, detail="削除する動画と残す動画に同じファイルは指定できません")
+        keep_full_paths.append(k_full)
+
+    trash_filename = os.path.basename(trash_full_path)
+    trash_rel = normalize_rel_path(trash_full_path)
+
+    inherited_favorite = False
+    merged_tags_total = 0
+
+    if request.merge_metadata:
+        # 1. お気に入り状態の引き継ぎ
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM favorites WHERE filename = ?", (trash_filename,))
+            was_trash_fav = cursor.fetchone() is not None
+
+            if was_trash_fav:
+                for k_full in keep_full_paths:
+                    k_filename = os.path.basename(k_full)
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO favorites (filename) VALUES (?)",
+                        (k_filename,),
+                    )
+                    if cursor.rowcount > 0:
+                        inherited_favorite = True
+                conn.commit()
+
+        # 2. NFOタグの引き継ぎ
+        trash_tags = read_nfo_tags(trash_full_path)
+        if trash_tags:
+            for k_full in keep_full_paths:
+                added = merge_nfo_tags(trash_tags, k_full)
+                merged_tags_total += added
+
+    # 3. 削除対象の動画と関連ファイルを media/trash/ へ移動
+    rel_from_media = os.path.relpath(trash_full_path, MEDIA_DIR)
+    target_trash_path = os.path.join(TRASH_DIR, rel_from_media)
+    target_trash_dir = os.path.dirname(target_trash_path)
+    os.makedirs(target_trash_dir, exist_ok=True)
+
+    related_files = get_related_files(trash_full_path)
+    for f in related_files:
+        src_file = str(f)
+        dst_file = os.path.join(target_trash_dir, f.name)
+        shutil.move(src_file, dst_file)
+        logger.info(f"[DuplicateResolve] Moved to trash: {src_file} -> {dst_file}")
+
+    # 4. キャッシュDBから削除した動画のハッシュレコードを除去
+    remove_cached_video_hash(trash_rel, DB_PATH)
+
+    return {
+        "status": "success",
+        "message": "メタデータを引き継いでゴミ箱へ移動しました",
+        "trashed_rel_path": trash_rel,
+        "target_trash_path": target_trash_path,
+        "inherited_favorite": inherited_favorite,
+        "merged_tags_count": merged_tags_total,
+    }
