@@ -24,7 +24,7 @@ def normalize_rel_path(video_path: str) -> str:
 
 
 def init_duplicates_db(db_path: str = DB_PATH):
-    """重複検出用のキャッシュテーブルと無視リストテーブルを初期化する"""
+    """重複検出用のキャッシュテーブルを初期化する"""
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     with sqlite3.connect(db_path) as conn:
         conn.execute("""
@@ -42,21 +42,7 @@ def init_duplicates_db(db_path: str = DB_PATH):
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS ignored_duplicates (
-                pair_key TEXT PRIMARY KEY,
-                path_a TEXT NOT NULL,
-                path_b TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
         conn.commit()
-
-
-def make_pair_key(rel_path_a: str, rel_path_b: str) -> str:
-    """2つの相対パスから順序に依存しない一意なペアキーを生成する"""
-    a, b = sorted([rel_path_a.replace("\\", "/"), rel_path_b.replace("\\", "/")])
-    return f"{a}||{b}"
 
 
 def compute_frame_dhash_128(frame: np.ndarray) -> str:
@@ -449,9 +435,6 @@ def find_duplicate_groups(
         cursor.execute("SELECT * FROM video_hashes ORDER BY duration ASC, rel_path ASC")
         rows = [dict(r) for r in cursor.fetchall()]
 
-        cursor.execute("SELECT pair_key FROM ignored_duplicates")
-        ignored_pairs = {r[0] for r in cursor.fetchall()}
-
         cursor.execute("SELECT filename FROM favorites")
         favorite_filenames = {r[0] for r in cursor.fetchall()}
 
@@ -503,12 +486,7 @@ def find_duplicate_groups(
             if abs(item_a["aspect"] - item_b["aspect"]) > 0.08:
                 continue
 
-            # 無視リストに登録されているペアはスキップ
-            pkey = make_pair_key(item_a["rel_path"], item_b["rel_path"])
-            if pkey in ignored_pairs:
-                continue
-
-            # 1. ファイルサイズ完全一致 ＆ 全フレームハッシュ完全一致
+            # フレームハッシュ比較
             sim = compare_signatures(item_a["parsed_hashes"], item_b["parsed_hashes"])
             if sim is not None and sim >= similarity_threshold:
                 union(i, j)
