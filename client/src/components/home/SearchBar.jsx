@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Menu, Search as SearchIcon, Heart, X } from 'lucide-react';
+import { Menu, Search as SearchIcon, Heart, Ellipsis, X } from 'lucide-react';
 
 export function SearchBar({
   onOpenMenu,
@@ -177,6 +177,15 @@ export function SearchBar({
           title="お気に入りのみ表示"
         >
           <Heart size={24} className={isFavoriteFilter ? 'fill-current' : ''} />
+        </button>
+
+        {/* その他メニューボタン */}
+        <button
+          type="button"
+          className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-colors"
+          title="メニュー"
+        >
+          <Ellipsis size={24} />
         </button>
       </div>
 
