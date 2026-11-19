@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
+  ArrowUp,
   RefreshCw,
   Play,
   Pause,
@@ -340,6 +341,52 @@ export default function Duplicates() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [resolvingRelPath, setResolvingRelPath] = useState(null);
+  const scrollToTopBtnRef = useRef(null);
+
+  // スクロール検知（上に戻るボタンの制御：300pxより下かつ上スクロール時のみ表示）
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+    let isScrollingUp = false;
+    let ticking = false;
+
+    const updateScrollTopBtn = (show) => {
+      if (!scrollToTopBtnRef.current) return;
+      if (show) {
+        scrollToTopBtnRef.current.style.opacity = '1';
+        scrollToTopBtnRef.current.style.pointerEvents = 'auto';
+        scrollToTopBtnRef.current.style.transform = 'translateY(0)';
+      } else {
+        scrollToTopBtnRef.current.style.opacity = '0';
+        scrollToTopBtnRef.current.style.pointerEvents = 'none';
+        scrollToTopBtnRef.current.style.transform = 'translateY(10px)';
+      }
+    };
+
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentScrollY = window.scrollY;
+
+          if (currentScrollY < lastScrollY) {
+            isScrollingUp = true;
+          } else if (currentScrollY > lastScrollY) {
+            isScrollingUp = false;
+          }
+
+          updateScrollTopBtn(currentScrollY > 300 && isScrollingUp);
+
+          lastScrollY = currentScrollY;
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
 
   // Jellyfinアイテムの照合マップ (サムネイル & ストリームURL取得用)
   const [jellyfinItems, setJellyfinItems] = useState([]);
@@ -653,6 +700,17 @@ export default function Duplicates() {
           </div>
         )}
       </div>
+
+      {/* 一番上に戻るボタン */}
+      <button
+        ref={scrollToTopBtnRef}
+        type="button"
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        className="fixed bottom-6 right-6 p-3 bg-zinc-800/50 text-white rounded-full shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-zinc-700/80 z-40 opacity-0 pointer-events-none translate-y-2 border border-zinc-700/50"
+        title="一番上に戻る"
+      >
+        <ArrowUp size={24} />
+      </button>
 
       {/* タグ一覧確認モーダル（プレイヤー画面と共通のInfoModalを再利用） */}
       <InfoModal
