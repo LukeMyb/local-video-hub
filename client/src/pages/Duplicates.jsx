@@ -27,6 +27,7 @@ import {
   refreshLibrary,
 } from '../api/jellyfin';
 import { InfoModal } from '../components/player/InfoModal';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 import { formatTime } from '../utils/formatters';
 
 function formatFileSize(bytes) {
@@ -40,6 +41,8 @@ function DuplicateGroupCard({
   groupIndex,
   jellyfinMap,
   resolvingRelPath,
+  savedVolume,
+  savedIsMuted,
   onOpenTags,
   onOpenFullPlayer,
   onResolveVideo,
@@ -47,6 +50,21 @@ function DuplicateGroupCard({
   const [activePlayers, setActivePlayers] = useState({});
   const [isGroupPlaying, setIsGroupPlaying] = useState(false);
   const videoRefs = useRef({});
+
+  const applySavedVolume = useCallback(
+    (el) => {
+      if (!el) return;
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      const effectiveVol = isMobile
+        ? 1
+        : savedIsMuted
+          ? 0
+          : Math.min(Math.max(Number(savedVolume) || 0, 0), 100) / 100;
+      el.volume = effectiveVol;
+      el.muted = isMobile ? false : !!savedIsMuted;
+    },
+    [savedVolume, savedIsMuted]
+  );
 
   // グループ内での最大解像度・最大ファイルサイズを計算（優れている方をハイライトするため）
   const { maxPixels, minPixels, maxSize, minSize } = useMemo(() => {
@@ -188,14 +206,17 @@ function DuplicateGroupCard({
                 {isPlayerActive ? (
                   <video
                     ref={(el) => {
-                      if (el) videoRefs.current[video.rel_path] = el;
+                      if (el) {
+                        videoRefs.current[video.rel_path] = el;
+                        applySavedVolume(el);
+                      }
                     }}
+                    onLoadedMetadata={(e) => applySavedVolume(e.currentTarget)}
                     src={streamUrl}
                     poster={thumbUrl || undefined}
                     controls
                     playsInline
                     autoPlay
-                    muted={isGroupPlaying}
                     className="w-full h-full object-contain bg-black"
                   />
                 ) : (
@@ -358,6 +379,8 @@ export default function Duplicates() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [resolvingRelPath, setResolvingRelPath] = useState(null);
+  const [savedVolume] = useLocalStorage('jellyfin_volume', 100);
+  const [savedIsMuted] = useLocalStorage('jellyfin_isMuted', false);
   const scrollToTopBtnRef = useRef(null);
 
   // スクロール検知（上に戻るボタンの制御：300pxより下かつ上スクロール時のみ表示）
@@ -709,6 +732,8 @@ export default function Duplicates() {
                 groupIndex={index}
                 jellyfinMap={jellyfinMap}
                 resolvingRelPath={resolvingRelPath}
+                savedVolume={savedVolume}
+                savedIsMuted={savedIsMuted}
                 onOpenTags={(filename, tags) =>
                   setTagModalInfo({
                     isOpen: true,
