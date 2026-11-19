@@ -478,6 +478,20 @@ def _run_duplicate_scan_task(target_dir: str, target_library: str | None, force:
         duplicate_scan_state["is_scanning"] = False
 
 
+from fastapi.responses import FileResponse
+
+
+@app.get("/api/videos/stream")
+async def stream_local_video(rel_path: str):
+    norm_media = os.path.normpath(MEDIA_DIR)
+    full_path = os.path.normpath(os.path.join(MEDIA_DIR, rel_path))
+    if not os.path.normcase(full_path).startswith(os.path.normcase(norm_media + os.sep)):
+        raise HTTPException(status_code=400, detail="対象ファイルがメディアディレクトリ外です")
+    if not os.path.isfile(full_path):
+        raise HTTPException(status_code=404, detail="動画ファイルが見つかりません")
+    return FileResponse(full_path, media_type="video/mp4")
+
+
 @app.get("/api/duplicates")
 async def get_duplicates(library: str | None = None, threshold: float = 0.92):
     target_lib = library.strip() if library and library.strip() else None

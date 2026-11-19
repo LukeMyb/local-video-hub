@@ -131,3 +131,7 @@ export const scanDuplicates = async ({ library = null, force = false, runAsync =
 
   return response.json();
 };
+
+export const getBackendVideoStreamUrl = (relPath) => {
+  return `${BACKEND_URL}/api/videos/stream?rel_path=${encodeURIComponent(relPath)}`;
+};

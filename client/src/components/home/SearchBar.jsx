@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Menu, Search as SearchIcon, Heart, Ellipsis, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Menu, Search as SearchIcon, Heart, Ellipsis, Copy, X } from 'lucide-react';
 
 export function SearchBar({
   onOpenMenu,
@@ -10,15 +11,19 @@ export function SearchBar({
   onToggleFavorite,
   resultCount // 絞り込み後の動画件数
 }) {
+  const navigate = useNavigate();
   // 入力欄を直接操作（フォーカスや値の取得）するためのRef
   const inputRef = useRef(null);
   // サジェスト領域外のクリック判定用Ref
   const suggestRef = useRef(null);
+  // その他メニュー領域外のクリック判定用Ref
+  const moreMenuRef = useRef(null);
 
   // 検索サジェストUIの表示・非表示と入力状態を管理するState
   const [inputText, setInputText] = useState(searchQuery || '');
   const [showClearButton, setShowClearButton] = useState(!!searchQuery);
   const [showSuggest, setShowSuggest] = useState(false);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
 
   // 入力文字に基づくサジェスト候補の絞り込み処理
   const suggestedTags = useMemo(() => {
@@ -89,7 +94,7 @@ export function SearchBar({
     onSearch(newSearchString); // 即座に検索を実行
   };
 
-  // 検索窓やサジェスト枠の外側をクリックした時にサジェストを閉じる処理
+  // 検索窓やサジェスト枠の外側をクリックした時にサジェストやメニューを閉じる処理
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -98,9 +103,16 @@ export function SearchBar({
       ) {
         setShowSuggest(false);
       }
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
+        setIsMoreMenuOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, []);
 
   return (
@@ -180,13 +192,32 @@ export function SearchBar({
         </button>
 
         {/* その他メニューボタン */}
-        <button
-          type="button"
-          className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-colors"
-          title="メニュー"
-        >
-          <Ellipsis size={24} />
-        </button>
+        <div ref={moreMenuRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setIsMoreMenuOpen((prev) => !prev)}
+            className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-colors"
+            title="メニュー"
+          >
+            <Ellipsis size={24} />
+          </button>
+
+          {isMoreMenuOpen && (
+            <div className="absolute right-0 top-full mt-2 w-48 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 rounded-xl shadow-2xl py-1.5 z-50 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMoreMenuOpen(false);
+                  navigate('/duplicates');
+                }}
+                className="w-full px-4 py-2.5 text-sm text-zinc-200 hover:text-white hover:bg-zinc-800/80 transition-colors flex items-center gap-3 text-left"
+              >
+                <Copy size={17} className="shrink-0" />
+                <span>重複動画の確認</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 下段: ステータスメッセージ */}

@@ -1,0 +1,573 @@
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft,
+  RefreshCw,
+  Play,
+  Pause,
+  Heart,
+  Tag,
+  Folder,
+  Maximize2,
+  Sparkles,
+} from 'lucide-react';
+import { getDuplicates, scanDuplicates, getBackendVideoStreamUrl } from '../api/backend';
+import { getVideos, getLibraries, getImageUrl, getVideoStreamUrl } from '../api/jellyfin';
+import { InfoModal } from '../components/player/InfoModal';
+import { formatTime } from '../utils/formatters';
+
+function formatFileSize(bytes) {
+  if (!bytes && bytes !== 0) return '-';
+  const mb = bytes / (1024 * 1024);
+  return `${mb.toFixed(2)} MB`;
+}
+
+function DuplicateGroupCard({
+  group,
+  groupIndex,
+  jellyfinMap,
+  onOpenTags,
+  onOpenFullPlayer,
+}) {
+  const [activePlayers, setActivePlayers] = useState({});
+  const [isGroupPlaying, setIsGroupPlaying] = useState(false);
+  const videoRefs = useRef({});
+
+  // グループ内での最大解像度・最大ファイルサイズを計算（優れている方をハイライトするため）
+  const { maxPixels, minPixels, maxSize, minSize } = useMemo(() => {
+    const pixelsList = group.videos.map((v) => (v.width || 0) * (v.height || 0));
+    const sizeList = group.videos.map((v) => v.file_size || 0);
+    return {
+      maxPixels: Math.max(...pixelsList),
+      minPixels: Math.min(...pixelsList),
+      maxSize: Math.max(...sizeList),
+      minSize: Math.min(...sizeList),
+    };
+  }, [group.videos]);
+
+  const handleToggleSimultaneousPlay = () => {
+    const allRelPaths = group.videos.map((v) => v.rel_path);
+    const allMounted = allRelPaths.every((p) => activePlayers[p]);
+
+    if (!allMounted) {
+      // 全動画のインラインプレイヤーを起動して自動再生
+      const next = {};
+      allRelPaths.forEach((p) => {
+        next[p] = true;
+      });
+      setActivePlayers(next);
+      setIsGroupPlaying(true);
+      setTimeout(() => {
+        allRelPaths.forEach((p) => {
+          const el = videoRefs.current[p];
+          if (el) {
+            el.play().catch(() => {});
+          }
+        });
+      }, 80);
+      return;
+    }
+
+    // 既にマウント済みの場合は一括再生 / 一括一時停止を切り替え
+    if (isGroupPlaying) {
+      allRelPaths.forEach((p) => {
+        const el = videoRefs.current[p];
+        if (el) el.pause();
+      });
+      setIsGroupPlaying(false);
+    } else {
+      allRelPaths.forEach((p) => {
+        const el = videoRefs.current[p];
+        if (el) el.play().catch(() => {});
+      });
+      setIsGroupPlaying(true);
+    }
+  };
+
+  const handleEnableSinglePlayer = (relPath) => {
+    setActivePlayers((prev) => ({ ...prev, [relPath]: true }));
+  };
+
+  return (
+    <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl overflow-hidden shadow-lg">
+      {/* グループヘッダー */}
+      <div className="px-3 py-2.5 md:px-4 md:py-3 bg-zinc-800/60 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs md:text-sm font-bold text-zinc-100">
+            グループ #{groupIndex + 1}
+          </span>
+          <span
+            className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
+              group.similarity >= 99.5
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+            }`}
+          >
+            一致度 {group.similarity.toFixed(1)}%
+          </span>
+          <span className="text-xs text-zinc-400">
+            再生時間 {formatTime(group.duration)}
+          </span>
+          {group.video_count > 2 && (
+            <span className="px-2 py-0.5 text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full">
+              {group.video_count}本重複
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleToggleSimultaneousPlay}
+            className="px-2.5 py-1 text-xs font-medium bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-md transition-colors flex items-center gap-1.5"
+          >
+            {isGroupPlaying ? <Pause size={13} /> : <Play size={13} />}
+            <span>{isGroupPlaying ? '一括停止' : '同時再生'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* スマホでもPCでも横並び2列（grid-cols-2）で見比べられるカードグリッド */}
+      <div className="p-2.5 md:p-4 grid grid-cols-2 gap-2.5 md:gap-4">
+        {group.videos.map((video) => {
+          const jfItem =
+            jellyfinMap.byRelPath.get(video.rel_path.toLowerCase()) ||
+            jellyfinMap.byFileName.get(video.filename.toLowerCase());
+          const thumbUrl = jfItem ? getImageUrl(jfItem) : null;
+          const streamUrl = jfItem
+            ? getVideoStreamUrl(jfItem.Id)
+            : getBackendVideoStreamUrl(video.rel_path);
+
+          const pixels = (video.width || 0) * (video.height || 0);
+          const isHigherRes = pixels > 0 && pixels === maxPixels && maxPixels > minPixels;
+          const isLargerSize =
+            video.file_size > 0 &&
+            video.file_size === maxSize &&
+            maxSize - minSize > 100 * 1024; // 100KB以上の差がある場合のみハイライト
+          const isPlayerActive = !!activePlayers[video.rel_path];
+
+          return (
+            <div
+              key={video.rel_path}
+              className="flex flex-col bg-[#202023] border border-zinc-800 rounded-lg overflow-hidden"
+            >
+              {/* プレビュー / インライン動画再生枠 */}
+              <div className="relative w-full aspect-2/3 max-h-64 md:max-h-80 bg-black flex items-center justify-center overflow-hidden">
+                {isPlayerActive ? (
+                  <video
+                    ref={(el) => {
+                      if (el) videoRefs.current[video.rel_path] = el;
+                    }}
+                    src={streamUrl}
+                    poster={thumbUrl || undefined}
+                    controls
+                    playsInline
+                    autoPlay
+                    muted={isGroupPlaying}
+                    className="w-full h-full object-contain bg-black"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleEnableSinglePlayer(video.rel_path)}
+                    className="relative w-full h-full group cursor-pointer flex items-center justify-center"
+                    title="タップしてこの場で再生"
+                  >
+                    {thumbUrl ? (
+                      <img
+                        src={thumbUrl}
+                        alt={video.filename}
+                        loading="lazy"
+                        className="w-full h-full object-contain bg-black group-hover:opacity-80 transition-opacity"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-zinc-900 text-zinc-500 text-xs">
+                        プレビュー
+                      </div>
+                    )}
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/25 group-hover:bg-black/40 transition-colors">
+                      <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-black/70 border border-white/20 flex items-center justify-center text-white shadow-lg">
+                        <Play size={20} className="fill-white ml-0.5" />
+                      </div>
+                    </div>
+                  </button>
+                )}
+
+                {/* フルプレイヤーで開くボタン（左上） */}
+                {jfItem && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenFullPlayer(jfItem.Id)}
+                    className="absolute top-1.5 right-1.5 p-1.5 rounded-md bg-black/70 hover:bg-black text-zinc-200 hover:text-white border border-white/10 transition-colors z-10"
+                    title="フル画面プレイヤーで開く"
+                  >
+                    <Maximize2 size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* メタデータ比較欄 */}
+              <div className="p-2.5 md:p-3 flex flex-col gap-1.5 text-xs flex-1">
+                {/* ライブラリ名 */}
+                <div className="flex items-center gap-1.5 text-zinc-300 font-medium truncate">
+                  <Folder size={13} className="text-blue-400 shrink-0" />
+                  <span className="truncate" title={video.library}>
+                    {video.library}
+                  </span>
+                </div>
+
+                {/* ファイル名 */}
+                <div
+                  className="text-zinc-400 font-mono text-[11px] truncate"
+                  title={video.filename}
+                >
+                  {video.filename}
+                </div>
+
+                {/* 解像度 */}
+                <div className="flex items-center justify-between gap-1 pt-1 border-t border-zinc-800/80">
+                  <span className="text-zinc-500">解像度</span>
+                  <div className="flex items-center gap-1">
+                    {isHigherRes && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded">
+                        高画質
+                      </span>
+                    )}
+                    <span
+                      className={`font-mono ${
+                        isHigherRes ? 'text-emerald-300 font-bold' : 'text-zinc-200'
+                      }`}
+                    >
+                      {video.width}×{video.height}
+                    </span>
+                  </div>
+                </div>
+
+                {/* ファイルサイズ */}
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-zinc-500">サイズ</span>
+                  <span
+                    className={`font-mono ${
+                      isLargerSize ? 'text-emerald-300 font-semibold' : 'text-zinc-200'
+                    }`}
+                  >
+                    {formatFileSize(video.file_size)}
+                  </span>
+                </div>
+
+                {/* お気に入り & タグ数 */}
+                <div className="flex items-center justify-between gap-1 pt-1 border-t border-zinc-800/80 mt-auto">
+                  <span
+                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium ${
+                      video.is_favorite
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                        : 'text-zinc-500'
+                    }`}
+                  >
+                    <Heart
+                      size={12}
+                      className={video.is_favorite ? 'fill-rose-400 text-rose-400' : ''}
+                    />
+                    <span>{video.is_favorite ? 'お気に入り' : 'なし'}</span>
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => onOpenTags(video.filename, video.tags)}
+                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] transition-colors ${
+                      video.tag_count > 0
+                        ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
+                        : 'text-zinc-500 hover:text-zinc-400'
+                    }`}
+                    title="タグ一覧を表示"
+                  >
+                    <Tag size={11} />
+                    <span>{video.tag_count}タグ</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export default function Duplicates() {
+  const navigate = useNavigate();
+  const [groups, setGroups] = useState([]);
+  const [cachedCount, setCachedCount] = useState(0);
+  const [scanStatus, setScanStatus] = useState(null);
+  const [libraries, setLibraries] = useState([]);
+  const [selectedLibrary, setSelectedLibrary] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Jellyfinアイテムの照合マップ (サムネイル & ストリームURL取得用)
+  const [jellyfinItems, setJellyfinItems] = useState([]);
+
+  // タグ確認モーダル用
+  const [tagModalInfo, setTagModalInfo] = useState({
+    isOpen: false,
+    filename: '',
+    tags: [],
+  });
+
+  const jellyfinMap = useMemo(() => {
+    const byRelPath = new Map();
+    const byFileName = new Map();
+
+    for (const item of jellyfinItems) {
+      if (!item.Path) continue;
+      const parts = item.Path.split(/[\\/]/);
+      const fileName = parts[parts.length - 1];
+      if (fileName) {
+        byFileName.set(fileName.toLowerCase(), item);
+      }
+      const mediaIdx = parts.findIndex((p) => p.toLowerCase() === 'media');
+      if (mediaIdx !== -1 && mediaIdx + 1 < parts.length) {
+        const rel = parts.slice(mediaIdx + 1).join('/').toLowerCase();
+        byRelPath.set(rel, item);
+      }
+    }
+
+    return { byRelPath, byFileName };
+  }, [jellyfinItems]);
+
+  const fetchDuplicateData = useCallback(
+    async (showSpinner = false) => {
+      if (showSpinner) setLoading(true);
+      setError(null);
+      try {
+        const data = await getDuplicates({
+          library: selectedLibrary || null,
+        });
+        setGroups(data.groups || []);
+        setCachedCount(data.cached_count || 0);
+        setScanStatus(data.scan_status || null);
+      } catch (err) {
+        console.error(err);
+        setError(err.message || '重複データの取得に失敗しました');
+      } finally {
+        if (showSpinner) setLoading(false);
+      }
+    },
+    [selectedLibrary]
+  );
+
+  // 初回マウント時にライブラリ一覧とJellyfin全動画リストを取得
+  useEffect(() => {
+    getLibraries()
+      .then((data) => {
+        const libs = (data.Items || []).filter(
+          (lib) => (lib.Name || '').toLowerCase() !== 'trash'
+        );
+        setLibraries(libs);
+      })
+      .catch((err) => console.error('Failed to fetch libraries:', err));
+
+    getVideos()
+      .then((data) => {
+        setJellyfinItems(data.Items || []);
+      })
+      .catch((err) => console.error('Failed to fetch videos for thumbnail map:', err));
+  }, []);
+
+  // 選択ライブラリ変更時に重複一覧を取得
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const data = await getDuplicates({
+          library: selectedLibrary || null,
+        });
+        if (cancelled) return;
+        setGroups(data.groups || []);
+        setCachedCount(data.cached_count || 0);
+        setScanStatus(data.scan_status || null);
+        setError(null);
+      } catch (err) {
+        if (cancelled) return;
+        console.error(err);
+        setError(err.message || '重複データの取得に失敗しました');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLibrary]);
+
+  // バックグラウンドスキャン実行中は1.5秒おきに進捗をポーリング
+  useEffect(() => {
+    if (!scanStatus?.is_scanning) return;
+    const timer = setInterval(() => {
+      fetchDuplicateData(false);
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [scanStatus?.is_scanning, fetchDuplicateData]);
+
+  const handleStartScan = async () => {
+    try {
+      setError(null);
+      const res = await scanDuplicates({
+        library: selectedLibrary || null,
+        force: false,
+        runAsync: true,
+      });
+      setScanStatus(res.scan_status);
+      setTimeout(() => fetchDuplicateData(false), 500);
+    } catch (err) {
+      alert(`スキャン開始エラー: ${err.message}`);
+    }
+  };
+
+  const isScanning = !!scanStatus?.is_scanning;
+  const scanProgressPercent =
+    isScanning && scanStatus?.total > 0
+      ? Math.round((scanStatus.current / scanStatus.total) * 100)
+      : 0;
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-200 flex flex-col pb-16">
+      {/* 上部固定ヘッダー */}
+      <div className="sticky top-0 z-30 bg-zinc-900/95 backdrop-blur-md border-b border-zinc-800 px-3 py-3 portrait:pt-14 md:portrait:pt-3 md:px-6">
+        <div className="max-w-6xl mx-auto flex flex-col gap-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-colors shrink-0"
+                title="ホームへ戻る"
+              >
+                <ArrowLeft size={22} />
+              </button>
+              <div className="min-w-0">
+                <h1 className="text-base md:text-lg font-bold text-zinc-100 truncate">
+                  重複動画の確認
+                </h1>
+                <p className="text-xs text-zinc-400">
+                  検出: <span className="text-zinc-100 font-semibold">{groups.length}</span> グループ
+                  <span className="mx-1.5 text-zinc-600">|</span>
+                  キャッシュ済: <span className="text-zinc-300">{cachedCount}</span> 本
+                </p>
+              </div>
+            </div>
+
+            {/* ライブラリ絞り込み & スキャンボタン */}
+            <div className="flex items-center gap-2 shrink-0">
+              <select
+                value={selectedLibrary}
+                onChange={(e) => {
+                  setLoading(true);
+                  setSelectedLibrary(e.target.value);
+                }}
+                className="py-1.5 px-2.5 bg-zinc-800 border border-zinc-700 rounded-md text-xs md:text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-600 max-w-36 md:max-w-52 truncate"
+              >
+                <option value="">すべてのライブラリ</option>
+                {libraries.map((lib) => (
+                  <option key={lib.Id} value={lib.Name}>
+                    {lib.Name}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={handleStartScan}
+                disabled={isScanning}
+                className={`px-3 py-1.5 rounded-md text-xs md:text-sm font-medium flex items-center gap-1.5 transition-colors ${
+                  isScanning
+                    ? 'bg-blue-600/40 text-blue-200 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-500 text-white'
+                }`}
+                title="新規・未キャッシュの動画のハッシュを計算します"
+              >
+                <RefreshCw size={15} className={isScanning ? 'animate-spin' : ''} />
+                <span>{isScanning ? 'スキャン中...' : 'スキャン'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* スキャン進捗バー */}
+          {isScanning && (
+            <div className="bg-zinc-800/80 border border-zinc-700 rounded-lg p-2.5 flex flex-col gap-1.5">
+              <div className="flex items-center justify-between text-xs text-zinc-300">
+                <span>
+                  {scanStatus.target_library
+                    ? `「${scanStatus.target_library}」をスキャン中...`
+                    : '全ライブラリをスキャン中...'}
+                </span>
+                <span className="font-mono">
+                  {scanStatus.current} / {scanStatus.total} 件 ({scanProgressPercent}%)
+                </span>
+              </div>
+              <div className="w-full h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-500 transition-all duration-300"
+                  style={{ width: `${scanProgressPercent}%` }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* メインリスト領域 */}
+      <div className="max-w-6xl w-full mx-auto p-3 md:p-6 flex-1 flex flex-col gap-4">
+        {error && (
+          <div className="p-4 bg-red-950/50 border border-red-800/80 rounded-lg text-sm text-red-200">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="py-16 text-center text-zinc-500 text-sm">
+            重複動画グループを読み込み中...
+          </div>
+        ) : groups.length === 0 ? (
+          <div className="py-16 px-4 text-center bg-zinc-900/50 border border-zinc-800/80 rounded-xl flex flex-col items-center gap-3">
+            <Sparkles size={32} className="text-zinc-500" />
+            <div className="text-sm md:text-base font-medium text-zinc-300">
+              重複している動画は見つかりませんでした
+            </div>
+            <p className="text-xs text-zinc-500 max-w-md">
+              まだスキャンしていないライブラリがある場合は、右上の「スキャン」ボタンを押すとハッシュ計算と重複検出が行われます。
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {groups.map((group, index) => (
+              <DuplicateGroupCard
+                key={group.group_id}
+                group={group}
+                groupIndex={index}
+                jellyfinMap={jellyfinMap}
+                onOpenTags={(filename, tags) =>
+                  setTagModalInfo({
+                    isOpen: true,
+                    filename,
+                    tags: (tags || []).map((t) => t.replace(/ /g, '_')),
+                  })
+                }
+                onOpenFullPlayer={(itemId) => navigate(`/player/${itemId}`)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* タグ一覧確認モーダル（プレイヤー画面と共通のInfoModalを再利用） */}
+      <InfoModal
+        isOpen={tagModalInfo.isOpen}
+        onClose={() => setTagModalInfo((prev) => ({ ...prev, isOpen: false }))}
+        videoFileName={tagModalInfo.filename}
+        tags={tagModalInfo.tags}
+      />
+    </div>
+  );
+}
