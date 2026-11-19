@@ -47,6 +47,7 @@ export function useVideoPlayer(id) {
   const [fullVideoInfo, setFullVideoInfo] = useState(null);
   const [libraries, setLibraries] = useState([]);
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
 
   const seekTo = useCallback(
     (time) => {
@@ -155,6 +156,14 @@ export function useVideoPlayer(id) {
       ? fullVideoInfo?.Path?.split(/[\\/]/).pop() || fullVideoInfo?.Name || ''
       : currentVideo?.FileName || '';
 
+  const videoTags = useMemo(() => {
+    const rawTags =
+      fullVideoInfo?.Id === id
+        ? fullVideoInfo?.Tags || currentVideo?.Tags || []
+        : currentVideo?.Tags || [];
+    return rawTags.map((tag) => tag.replace(/ /g, '_'));
+  }, [fullVideoInfo, id, currentVideo]);
+
   const currentLibraryName = useMemo(() => {
     if (fullVideoInfo?.Id !== id || !fullVideoInfo?.Path) return '';
     const parts = fullVideoInfo.Path.split(/[\\/]/);
@@ -199,6 +208,14 @@ export function useVideoPlayer(id) {
 
   const handleCloseMoveModal = useCallback(() => {
     setIsMoveModalOpen(false);
+  }, []);
+
+  const handleOpenInfoModal = useCallback(() => {
+    setIsInfoModalOpen(true);
+  }, []);
+
+  const handleCloseInfoModal = useCallback(() => {
+    setIsInfoModalOpen(false);
   }, []);
 
   const handleMoveVideo = useCallback(
@@ -335,6 +352,7 @@ export function useVideoPlayer(id) {
   const handlePrev = useCallback(() => {
     if (prevVideo) {
       setIsMoveModalOpen(false);
+      setIsInfoModalOpen(false);
       resetZoom();
       resetFineSeek();
       navigate(`/player/${prevVideo.Id}`, { state: { playlist } });
@@ -344,6 +362,7 @@ export function useVideoPlayer(id) {
   const handleNext = useCallback(() => {
     if (nextVideo) {
       setIsMoveModalOpen(false);
+      setIsInfoModalOpen(false);
       resetZoom();
       resetFineSeek();
       navigate(`/player/${nextVideo.Id}`, { state: { playlist } });
@@ -500,6 +519,10 @@ export function useVideoPlayer(id) {
     handleOpenMoveModal,
     handleCloseMoveModal,
     handleMoveVideo,
+    isInfoModalOpen,
+    videoTags,
+    handleOpenInfoModal,
+    handleCloseInfoModal,
     handleControlsMouseEnter,
     fineSeek,
   };

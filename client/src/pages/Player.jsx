@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Ellipsis, Forward, Trash, Undo } from 'lucide-react';
+import { ArrowLeft, Ellipsis, Forward, Info, Trash, Undo } from 'lucide-react';
 import { Controls } from '../components/player/Controls';
+import { InfoModal } from '../components/player/InfoModal';
 import { MoveModal } from '../components/player/MoveModal';
 import { useVideoPlayer } from '../hooks/useVideoPlayer';
 
@@ -60,6 +61,10 @@ function Player() {
     handleOpenMoveModal,
     handleCloseMoveModal,
     handleMoveVideo,
+    isInfoModalOpen,
+    videoTags,
+    handleOpenInfoModal,
+    handleCloseInfoModal,
     fineSeek
   } = useVideoPlayer(id);
 
@@ -137,6 +142,18 @@ function Player() {
                     type="button"
                     onClick={() => {
                       setIsMenuOpen(false);
+                      handleOpenInfoModal();
+                    }}
+                    className="w-full px-4 py-2.5 text-sm text-zinc-200 hover:text-white hover:bg-zinc-800/80 transition-colors flex items-center gap-3 text-left"
+                    title="情報"
+                  >
+                    <Info size={18} className="shrink-0" />
+                    <span>情報</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMenuOpen(false);
                       handleOpenMoveModal();
                     }}
                     className="w-full px-4 py-2.5 text-sm text-zinc-200 hover:text-white hover:bg-zinc-800/80 transition-colors flex items-center gap-3 text-left"
@@ -168,6 +185,14 @@ function Player() {
           )}
         </div>
       </div>
+
+      {/* 動画情報（タグ一覧）を表示するモーダル */}
+      <InfoModal
+        isOpen={isInfoModalOpen}
+        onClose={handleCloseInfoModal}
+        videoFileName={videoFileName}
+        tags={videoTags}
+      />
 
       {/* 別のライブラリへ移動するモーダル */}
       <MoveModal

@@ -56,7 +56,7 @@ export const getVideoInfo = async (itemId) => {
 
   const url = new URL(`${API_URL}/Users/${USER_ID}/Items/${itemId}`);
   url.searchParams.append('api_key', API_KEY);
-  url.searchParams.append('Fields', 'Path');
+  url.searchParams.append('Fields', 'Path,Tags');
 
   const res = await fetch(url.toString());
   if (!res.ok) {
