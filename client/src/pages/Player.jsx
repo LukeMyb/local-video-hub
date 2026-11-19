@@ -1,5 +1,6 @@
+import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Forward, Trash, Undo } from 'lucide-react';
+import { ArrowLeft, Ellipsis, Forward, Trash, Undo } from 'lucide-react';
 import { Controls } from '../components/player/Controls';
 import { MoveModal } from '../components/player/MoveModal';
 import { useVideoPlayer } from '../hooks/useVideoPlayer';
@@ -7,6 +8,8 @@ import { useVideoPlayer } from '../hooks/useVideoPlayer';
 function Player() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef(null);
 
   // ロジックと状態管理をカスタムフックに委譲
   const {
@@ -60,6 +63,21 @@ function Player() {
     fineSeek
   } = useVideoPlayer(id);
 
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setIsMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [isMenuOpen]);
+
   return (
     <div 
       ref={containerRef} 
@@ -103,27 +121,50 @@ function Player() {
               <Undo size={24} />
             </button>
           ) : (
-            <>
+            <div ref={menuRef} className="relative">
               <button
-                onClick={handleOpenMoveModal}
+                type="button"
+                onClick={() => setIsMenuOpen((prev) => !prev)}
                 className="px-4 py-2 text-zinc-300 hover:text-white hover:bg-zinc-800/80 rounded-full transition-colors flex items-center justify-center"
-                title="別のライブラリへ移動"
+                title="メニュー"
               >
-                <Forward size={24} />
+                <Ellipsis size={24} />
               </button>
-              <button
-                onClick={handleTrashVideo}
-                disabled={isFavorite}
-                className={`px-4 py-2 rounded-full transition-colors flex items-center justify-center ${
-                  isFavorite
-                    ? 'text-zinc-600 cursor-not-allowed'
-                    : 'text-zinc-300 hover:text-red-400 hover:bg-zinc-800/80'
-                }`}
-                title={isFavorite ? "お気に入り登録中はゴミ箱へ移動できません" : "ゴミ箱へ移動（論理削除）"}
-              >
-                <Trash size={24} />
-              </button>
-            </>
+
+              {isMenuOpen && showControls && (
+                <div className="absolute right-0 top-full mt-2 w-52 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 rounded-xl shadow-2xl py-1.5 z-50 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      handleOpenMoveModal();
+                    }}
+                    className="w-full px-4 py-2.5 text-sm text-zinc-200 hover:text-white hover:bg-zinc-800/80 transition-colors flex items-center gap-3 text-left"
+                    title="別のライブラリへ移動"
+                  >
+                    <Forward size={18} className="shrink-0" />
+                    <span>別のライブラリへ移動</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      handleTrashVideo();
+                    }}
+                    disabled={isFavorite}
+                    className={`w-full px-4 py-2.5 text-sm transition-colors flex items-center gap-3 text-left ${
+                      isFavorite
+                        ? 'text-zinc-600 cursor-not-allowed'
+                        : 'text-zinc-200 hover:text-red-400 hover:bg-zinc-800/80'
+                    }`}
+                    title={isFavorite ? "お気に入り登録中はゴミ箱へ移動できません" : "ゴミ箱へ移動（論理削除）"}
+                  >
+                    <Trash size={18} className="shrink-0" />
+                    <span>ゴミ箱へ移動</span>
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
