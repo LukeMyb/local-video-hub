@@ -596,6 +596,38 @@ def _resolve_safe_media_path(rel_or_full_path: str) -> str:
     return candidate
 
 
+import gc
+
+
+def _safe_move_file(src_file: str, dst_file: str, max_retries: int = 12, delay_sec: float = 0.25):
+    """
+    Windowsで動画ストリームのファイルハンドル解放が遅れた場合(WinError 32)に備え、
+    リトライ付きでファイル移動を行う。
+    """
+    last_err = None
+    for attempt in range(max_retries):
+        try:
+            shutil.move(src_file, dst_file)
+            return
+        except PermissionError as e:
+            last_err = e
+            gc.collect()
+            time.sleep(delay_sec)
+        except OSError as e:
+            last_err = e
+            if getattr(e, "winerror", None) == 32:
+                gc.collect()
+                time.sleep(delay_sec)
+            else:
+                break
+
+    logger.error(f"ファイル移動に失敗しました (ロック中): {src_file} -> {dst_file} ({last_err})")
+    raise HTTPException(
+        status_code=409,
+        detail=f"ファイルが使用中のため移動できませんでした。少し待ってから再度お試しください ({os.path.basename(src_file)})",
+    )
+
+
 @app.post("/api/duplicates/resolve")
 async def resolve_duplicate(request: DuplicateResolveRequest):
     if not SECRET_API_KEY or request.api_key != SECRET_API_KEY:
@@ -618,46 +650,52 @@ async def resolve_duplicate(request: DuplicateResolveRequest):
     inherited_favorite = False
     merged_tags_total = 0
 
-    if request.merge_metadata:
-        # 1. お気に入り状態の引き継ぎ
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT 1 FROM favorites WHERE filename = ?", (trash_filename,))
-            was_trash_fav = cursor.fetchone() is not None
+    try:
+        if request.merge_metadata:
+            # 1. お気に入り状態の引き継ぎ
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT 1 FROM favorites WHERE filename = ?", (trash_filename,))
+                was_trash_fav = cursor.fetchone() is not None
 
-            if was_trash_fav:
+                if was_trash_fav:
+                    for k_full in keep_full_paths:
+                        k_filename = os.path.basename(k_full)
+                        cursor.execute(
+                            "INSERT OR IGNORE INTO favorites (filename) VALUES (?)",
+                            (k_filename,),
+                        )
+                        if cursor.rowcount > 0:
+                            inherited_favorite = True
+                    conn.commit()
+
+            # 2. NFOタグの引き継ぎ
+            trash_tags = read_nfo_tags(trash_full_path)
+            if trash_tags:
                 for k_full in keep_full_paths:
-                    k_filename = os.path.basename(k_full)
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO favorites (filename) VALUES (?)",
-                        (k_filename,),
-                    )
-                    if cursor.rowcount > 0:
-                        inherited_favorite = True
-                conn.commit()
+                    added = merge_nfo_tags(trash_tags, k_full)
+                    merged_tags_total += added
 
-        # 2. NFOタグの引き継ぎ
-        trash_tags = read_nfo_tags(trash_full_path)
-        if trash_tags:
-            for k_full in keep_full_paths:
-                added = merge_nfo_tags(trash_tags, k_full)
-                merged_tags_total += added
+        # 3. 削除対象の動画と関連ファイルを media/trash/ へ移動
+        rel_from_media = os.path.relpath(trash_full_path, MEDIA_DIR)
+        target_trash_path = os.path.join(TRASH_DIR, rel_from_media)
+        target_trash_dir = os.path.dirname(target_trash_path)
+        os.makedirs(target_trash_dir, exist_ok=True)
 
-    # 3. 削除対象の動画と関連ファイルを media/trash/ へ移動
-    rel_from_media = os.path.relpath(trash_full_path, MEDIA_DIR)
-    target_trash_path = os.path.join(TRASH_DIR, rel_from_media)
-    target_trash_dir = os.path.dirname(target_trash_path)
-    os.makedirs(target_trash_dir, exist_ok=True)
+        related_files = get_related_files(trash_full_path)
+        for f in related_files:
+            src_file = str(f)
+            dst_file = os.path.join(target_trash_dir, f.name)
+            _safe_move_file(src_file, dst_file)
+            logger.info(f"[DuplicateResolve] Moved to trash: {src_file} -> {dst_file}")
 
-    related_files = get_related_files(trash_full_path)
-    for f in related_files:
-        src_file = str(f)
-        dst_file = os.path.join(target_trash_dir, f.name)
-        shutil.move(src_file, dst_file)
-        logger.info(f"[DuplicateResolve] Moved to trash: {src_file} -> {dst_file}")
-
-    # 4. キャッシュDBから削除した動画のハッシュレコードを除去
-    remove_cached_video_hash(trash_rel, DB_PATH)
+        # 4. キャッシュDBから削除した動画のハッシュレコードを除去
+        remove_cached_video_hash(trash_rel, DB_PATH)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[DuplicateResolve] 予期せぬエラー: {e}")
+        raise HTTPException(status_code=500, detail=f"削除処理中にエラーが発生しました: {e}")
 
     return {
         "status": "success",

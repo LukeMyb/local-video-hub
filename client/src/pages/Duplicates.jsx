@@ -103,6 +103,23 @@ function DuplicateGroupCard({
     setActivePlayers((prev) => ({ ...prev, [relPath]: true }));
   };
 
+  const releaseGroupPlayers = useCallback(() => {
+    Object.values(videoRefs.current).forEach((el) => {
+      if (el) {
+        try {
+          el.pause();
+          el.removeAttribute('src');
+          el.load();
+        } catch {
+          // ignore
+        }
+      }
+    });
+    videoRefs.current = {};
+    setActivePlayers({});
+    setIsGroupPlaying(false);
+  }, []);
+
   return (
     <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl overflow-hidden shadow-lg">
       {/* グループヘッダー */}
@@ -305,7 +322,7 @@ function DuplicateGroupCard({
                 <button
                   type="button"
                   disabled={!!resolvingRelPath}
-                  onClick={() => onResolveVideo(group, video)}
+                  onClick={() => onResolveVideo(group, video, releaseGroupPlayers)}
                   className={`mt-1.5 w-full py-2 px-2 rounded-md text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
                     resolvingRelPath === video.rel_path
                       ? 'bg-red-900/40 text-red-300 cursor-wait border border-red-800/50'
@@ -509,7 +526,7 @@ export default function Duplicates() {
     }
   };
 
-  const handleResolveVideo = async (group, targetVideo) => {
+  const handleResolveVideo = async (group, targetVideo, releaseGroupPlayers) => {
     const keepVideos = group.videos.filter((v) => v.rel_path !== targetVideo.rel_path);
     if (keepVideos.length === 0) return;
 
@@ -533,6 +550,12 @@ export default function Duplicates() {
 
     setResolvingRelPath(targetVideo.rel_path);
     try {
+      // Windowsでのファイルロック(WinError 32)を防ぐため、削除リクエスト前に<video>のストリーム接続を明示的に破棄する
+      if (releaseGroupPlayers) {
+        releaseGroupPlayers();
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+
       await resolveDuplicate({
         trashRelPath: targetVideo.rel_path,
         keepRelPaths: keepVideos.map((v) => v.rel_path),
