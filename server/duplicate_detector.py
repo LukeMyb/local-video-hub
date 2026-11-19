@@ -166,12 +166,23 @@ def collect_video_files(target_dir: str = MEDIA_DIR) -> list[str]:
     return video_files
 
 
+def get_cached_video_count(db_path: str = DB_PATH) -> int:
+    """キャッシュ済みの動画件数を返す"""
+    init_duplicates_db(db_path)
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM video_hashes")
+        row = cursor.fetchone()
+        return row[0] if row else 0
+
+
 def scan_and_cache_videos(
     target_dir: str = MEDIA_DIR,
     db_path: str = DB_PATH,
     force: bool = False,
     max_workers: int = 4,
     show_progress: bool = True,
+    progress_callback=None,
 ) -> dict:
     """
     mediaディレクトリ内の動画を走査し、新規・更新された動画のハッシュをSQLiteにキャッシュする。
@@ -224,21 +235,25 @@ def scan_and_cache_videos(
     processed_count = 0
     error_count = 0
     batch_rows = []
+    total_to_process = len(to_process)
+
+    if progress_callback:
+        progress_callback(0, total_to_process)
 
     if to_process:
         pbar = tqdm(
-            total=len(to_process),
+            total=total_to_process,
             desc="ハッシュ計算中",
             unit="video",
             disable=not show_progress,
             dynamic_ncols=True,
         )
+        done_so_far = 0
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_path = {
                 executor.submit(extract_video_signature, vp): vp for vp in to_process
             }
             for future in as_completed(future_to_path):
-                vp = future_to_path[future]
                 try:
                     sig = future.result()
                     if sig is not None:
@@ -260,7 +275,11 @@ def scan_and_cache_videos(
                 except Exception:
                     error_count += 1
 
+                done_so_far += 1
                 pbar.update(1)
+                if progress_callback:
+                    progress_callback(done_so_far, total_to_process)
+
                 if len(batch_rows) >= 100:
                     _save_hash_batch(db_path, batch_rows)
                     batch_rows.clear()

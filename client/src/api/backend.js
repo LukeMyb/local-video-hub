@@ -91,3 +91,43 @@ export const toggleFavorite = async (filename) => {
   const data = await response.json();
   return data.is_favorite;
 };
+
+export const getDuplicates = async ({ library = null, threshold = 0.92 } = {}) => {
+  const url = new URL(`${BACKEND_URL}/api/duplicates`);
+  if (library) {
+    url.searchParams.append('library', library);
+  }
+  if (threshold) {
+    url.searchParams.append('threshold', String(threshold));
+  }
+
+  const response = await fetch(url.toString());
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || '重複動画一覧の取得に失敗しました');
+  }
+
+  return response.json();
+};
+
+export const scanDuplicates = async ({ library = null, force = false, runAsync = true } = {}) => {
+  const response = await fetch(`${BACKEND_URL}/api/duplicates/scan`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      api_key: BACKEND_API_KEY,
+      library,
+      force,
+      run_async: runAsync,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || '重複スキャンの開始に失敗しました');
+  }
+
+  return response.json();
+};

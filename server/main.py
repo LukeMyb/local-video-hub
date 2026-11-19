@@ -413,3 +413,136 @@ async def toggle_favorite(request: FavoriteToggleRequest):
         conn.commit()
 
     return {"status": "success", "filename": filename, "is_favorite": is_favorite}
+
+
+# --- 重複動画検出 API (Step 2) ---
+try:
+    from server.duplicate_detector import (
+        init_duplicates_db,
+        scan_and_cache_videos,
+        find_duplicate_groups,
+        get_cached_video_count,
+    )
+except ImportError:
+    from duplicate_detector import (
+        init_duplicates_db,
+        scan_and_cache_videos,
+        find_duplicate_groups,
+        get_cached_video_count,
+    )
+
+init_duplicates_db(DB_PATH)
+
+duplicate_scan_state = {
+    "is_scanning": False,
+    "current": 0,
+    "total": 0,
+    "target_library": None,
+    "last_result": None,
+    "error": None,
+}
+
+
+class DuplicateScanRequest(BaseModel):
+    api_key: str
+    library: str | None = None
+    force: bool = False
+    run_async: bool = True
+
+
+def _run_duplicate_scan_task(target_dir: str, target_library: str | None, force: bool):
+    duplicate_scan_state["is_scanning"] = True
+    duplicate_scan_state["current"] = 0
+    duplicate_scan_state["total"] = 0
+    duplicate_scan_state["target_library"] = target_library
+    duplicate_scan_state["error"] = None
+
+    def _on_progress(current: int, total: int):
+        duplicate_scan_state["current"] = current
+        duplicate_scan_state["total"] = total
+
+    try:
+        result = scan_and_cache_videos(
+            target_dir=target_dir,
+            db_path=DB_PATH,
+            force=force,
+            max_workers=4,
+            show_progress=False,
+            progress_callback=_on_progress,
+        )
+        duplicate_scan_state["last_result"] = result
+    except Exception as e:
+        logger.error(f"重複スキャン中にエラーが発生しました: {e}")
+        duplicate_scan_state["error"] = str(e)
+    finally:
+        duplicate_scan_state["is_scanning"] = False
+
+
+@app.get("/api/duplicates")
+async def get_duplicates(library: str | None = None, threshold: float = 0.92):
+    target_lib = library.strip() if library and library.strip() else None
+    groups = find_duplicate_groups(
+        db_path=DB_PATH,
+        similarity_threshold=threshold,
+        target_library=target_lib,
+    )
+    cached_count = get_cached_video_count(DB_PATH)
+    return {
+        "status": "success",
+        "total_groups": len(groups),
+        "cached_count": cached_count,
+        "scan_status": duplicate_scan_state,
+        "groups": groups,
+    }
+
+
+@app.post("/api/duplicates/scan")
+async def scan_duplicates(request: DuplicateScanRequest, background_tasks: BackgroundTasks):
+    if not SECRET_API_KEY or request.api_key != SECRET_API_KEY:
+        raise HTTPException(status_code=401, detail="APIキーが間違っています")
+
+    if duplicate_scan_state["is_scanning"]:
+        return {
+            "status": "already_running",
+            "message": "現在スキャンを実行中です",
+            "scan_status": duplicate_scan_state,
+        }
+
+    target_dir = MEDIA_DIR
+    target_library = None
+
+    if request.library and request.library.strip():
+        lib_name = request.library.strip()
+        if (
+            "/" in lib_name
+            or "\\" in lib_name
+            or lib_name in (".", "..")
+            or lib_name.lower() == "trash"
+        ):
+            raise HTTPException(status_code=400, detail="ライブラリ名が不正です")
+
+        candidate_dir = os.path.normpath(os.path.join(MEDIA_DIR, lib_name))
+        if not os.path.isdir(candidate_dir):
+            raise HTTPException(status_code=404, detail="指定されたライブラリが存在しません")
+        target_dir = candidate_dir
+        target_library = lib_name
+
+    if request.run_async:
+        duplicate_scan_state["is_scanning"] = True
+        duplicate_scan_state["current"] = 0
+        duplicate_scan_state["total"] = 0
+        duplicate_scan_state["target_library"] = target_library
+        duplicate_scan_state["error"] = None
+        background_tasks.add_task(_run_duplicate_scan_task, target_dir, target_library, request.force)
+        return {
+            "status": "started",
+            "message": "重複動画のスキャンをバックグラウンドで開始しました",
+            "scan_status": duplicate_scan_state,
+        }
+    else:
+        _run_duplicate_scan_task(target_dir, target_library, request.force)
+        return {
+            "status": "completed",
+            "message": "重複動画のスキャンが完了しました",
+            "scan_status": duplicate_scan_state,
+        }
