@@ -379,6 +379,8 @@ export default function Duplicates() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [resolvingRelPath, setResolvingRelPath] = useState(null);
+  const [homeLibraryId] = useLocalStorage('jellyfin_libraryId', null);
+  const [isLibraryReady, setIsLibraryReady] = useState(() => !homeLibraryId);
   const [savedVolume] = useLocalStorage('jellyfin_volume', 100);
   const [savedIsMuted] = useLocalStorage('jellyfin_isMuted', false);
   const scrollToTopBtnRef = useRef(null);
@@ -488,18 +490,28 @@ export default function Duplicates() {
           (lib) => (lib.Name || '').toLowerCase() !== 'trash'
         );
         setLibraries(libs);
+        if (homeLibraryId) {
+          const matched = libs.find((lib) => lib.Id === homeLibraryId);
+          if (matched?.Name) {
+            setSelectedLibrary(matched.Name);
+          }
+        }
       })
-      .catch((err) => console.error('Failed to fetch libraries:', err));
+      .catch((err) => console.error('Failed to fetch libraries:', err))
+      .finally(() => {
+        setIsLibraryReady(true);
+      });
 
     getVideos()
       .then((data) => {
         setJellyfinItems(data.Items || []);
       })
       .catch((err) => console.error('Failed to fetch videos for thumbnail map:', err));
-  }, []);
+  }, [homeLibraryId]);
 
   // 選択ライブラリ変更時に重複一覧を取得
   useEffect(() => {
+    if (!isLibraryReady) return;
     let cancelled = false;
     const load = async () => {
       try {
@@ -523,7 +535,7 @@ export default function Duplicates() {
     return () => {
       cancelled = true;
     };
-  }, [selectedLibrary]);
+  }, [selectedLibrary, isLibraryReady]);
 
   // バックグラウンドスキャン実行中は1.5秒おきに進捗をポーリング
   useEffect(() => {
