@@ -46,7 +46,11 @@ export const getLibraries = async () => {
   }
 
   const data = await res.json();
-  return data; // { Items: [...] } が返る
+  // 映画（movies）カテゴリーのライブラリのみを対象とし、音楽（music）などの別カテゴリーを除外する
+  const movieLibraries = (data.Items || []).filter(
+    (lib) => (lib.CollectionType || '').toLowerCase() === 'movies'
+  );
+  return { ...data, Items: movieLibraries };
 };
 
 export const getVideoInfo = async (itemId) => {
