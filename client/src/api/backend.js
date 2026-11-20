@@ -162,6 +162,27 @@ export const resolveDuplicate = async ({
   return response.json();
 };
 
+export const resolveDuplicatesBatch = async ({ items, mergeMetadata = true }) => {
+  const response = await fetch(`${BACKEND_URL}/api/duplicates/resolve-batch`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      items,
+      merge_metadata: mergeMetadata,
+      api_key: BACKEND_API_KEY,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || '重複動画の一括削除に失敗しました');
+  }
+
+  return response.json();
+};
+
 export const getSystemStatus = async () => {
   const response = await fetch(`${BACKEND_URL}/api/system/status`);
   if (!response.ok) {

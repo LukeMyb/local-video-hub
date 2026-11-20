@@ -18,6 +18,7 @@ import {
   scanDuplicates,
   getBackendVideoStreamUrl,
   resolveDuplicate,
+  resolveDuplicatesBatch,
 } from '../api/backend';
 import {
   getVideos,
@@ -379,6 +380,7 @@ export default function Duplicates() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [resolvingRelPath, setResolvingRelPath] = useState(null);
+  const [isBulkResolving, setIsBulkResolving] = useState(false);
   const [homeLibraryId] = useLocalStorage('jellyfin_libraryId', null);
   const [isLibraryReady, setIsLibraryReady] = useState(() => !homeLibraryId);
   const [savedVolume] = useLocalStorage('jellyfin_volume', 100);
@@ -627,6 +629,86 @@ export default function Duplicates() {
       ? Math.round((scanStatus.current / scanStatus.total) * 100)
       : 0;
 
+  const exactMatchGroups = useMemo(
+    () => groups.filter((g) => g.similarity >= 100.0 && g.videos.length >= 2),
+    [groups]
+  );
+
+  const { exactTrashCount, exactTrashBytes } = useMemo(() => {
+    let count = 0;
+    let bytes = 0;
+    for (const g of exactMatchGroups) {
+      for (let i = 1; i < g.videos.length; i++) {
+        count += 1;
+        bytes += g.videos[i].file_size || 0;
+      }
+    }
+    return { exactTrashCount: count, exactTrashBytes: bytes };
+  }, [exactMatchGroups]);
+
+  const handleBulkResolveExactMatches = async () => {
+    if (exactMatchGroups.length === 0 || isBulkResolving) return;
+
+    const confirmed = window.confirm(
+      `一致度 100.0% の重複グループ ${exactMatchGroups.length} 組（削除対象: 計 ${exactTrashCount} 本 / ${formatFileSize(exactTrashBytes)}）を一括でゴミ箱へ移動しますか？\n\n※各グループで最も高画質・大容量の1本（左端のカード）を残し、お気に入りとタグを引き継いで残りをゴミ箱へ移動します。`
+    );
+    if (!confirmed) return;
+
+    setIsBulkResolving(true);
+    try {
+      // 再生中・一時停止中のすべての<video>のストリーム接続を解放してWindowsのファイルロックを防ぐ
+      document.querySelectorAll('video').forEach((el) => {
+        try {
+          el.pause();
+          el.removeAttribute('src');
+          el.load();
+        } catch {
+          // ignore
+        }
+      });
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      const items = exactMatchGroups.map((g) => ({
+        keep_rel_path: g.videos[0].rel_path,
+        trash_rel_paths: g.videos.slice(1).map((v) => v.rel_path),
+      }));
+
+      const res = await resolveDuplicatesBatch({
+        items,
+        mergeMetadata: true,
+      });
+
+      // ホーム画面のキャッシュでも非表示になるようにセッションストレージを更新
+      const hidden = JSON.parse(sessionStorage.getItem('jellyfin_hidden_ids') || '{}');
+      const now = Date.now();
+      for (const trashedRel of res.trashed_rel_paths || []) {
+        const fileName = trashedRel.split('/').pop() || '';
+        const jfItem =
+          jellyfinMap.byRelPath.get(trashedRel.toLowerCase()) ||
+          jellyfinMap.byFileName.get(fileName.toLowerCase());
+        if (jfItem?.Id) {
+          hidden[jfItem.Id] = now;
+        }
+      }
+      sessionStorage.setItem('jellyfin_hidden_ids', JSON.stringify(hidden));
+      sessionStorage.setItem('jellyfin_delay_fetch', 'true');
+
+      refreshLibrary().catch((e) => console.error(e));
+      await fetchDuplicateData(false);
+
+      if (res.failed && res.failed.length > 0) {
+        alert(
+          `${res.trashed_count}本をゴミ箱へ移動しました（${res.failed.length}本は移動できませんでした）。`
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      alert(`一括削除エラー: ${err.message}`);
+    } finally {
+      setIsBulkResolving(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-200 flex flex-col pb-16">
       {/* 上部固定ヘッダー */}
@@ -708,6 +790,33 @@ export default function Duplicates() {
                   style={{ width: `${scanProgressPercent}%` }}
                 />
               </div>
+            </div>
+          )}
+
+          {/* 一致度100%の一括削除バー */}
+          {!loading && exactMatchGroups.length > 0 && (
+            <div className="bg-emerald-950/30 border border-emerald-800/50 rounded-lg px-3 py-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="text-xs text-zinc-300">
+                一致度100%:{' '}
+                <span className="font-bold text-emerald-300">{exactMatchGroups.length}組</span>
+                <span className="text-zinc-400">
+                  （削除対象 {exactTrashCount}本 / {formatFileSize(exactTrashBytes)}）
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleBulkResolveExactMatches}
+                disabled={isBulkResolving || !!resolvingRelPath}
+                className="px-3 py-1.5 rounded-md text-xs font-medium bg-red-700 hover:bg-red-600 text-white transition-colors flex items-center gap-1.5 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="一致度100%の各グループで1本（高画質・大容量優先）を残し、お気に入りとタグを引き継いで残りを一括でゴミ箱へ移動します"
+              >
+                <Trash2 size={13} className="shrink-0" />
+                <span>
+                  {isBulkResolving
+                    ? '一括削除中...'
+                    : `100%一致を一括削除 (${exactMatchGroups.length}組)`}
+                </span>
+              </button>
             </div>
           )}
         </div>

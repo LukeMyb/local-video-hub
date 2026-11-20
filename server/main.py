@@ -707,6 +707,113 @@ async def resolve_duplicate(request: DuplicateResolveRequest):
     }
 
 
+class DuplicateBatchGroupItem(BaseModel):
+    keep_rel_path: str
+    trash_rel_paths: list[str]
+
+
+class DuplicateResolveBatchRequest(BaseModel):
+    items: list[DuplicateBatchGroupItem]
+    merge_metadata: bool = True
+    api_key: str
+
+
+@app.post("/api/duplicates/resolve-batch")
+async def resolve_duplicates_batch(request: DuplicateResolveBatchRequest):
+    if not SECRET_API_KEY or request.api_key != SECRET_API_KEY:
+        raise HTTPException(status_code=401, detail="APIキーが間違っています")
+
+    if not request.items:
+        raise HTTPException(status_code=400, detail="一括削除の対象が指定されていません")
+
+    resolved_groups = 0
+    trashed_rel_paths = []
+    inherited_favorites_count = 0
+    merged_tags_total = 0
+    failed_items = []
+
+    for group_item in request.items:
+        try:
+            keep_full = _resolve_safe_media_path(group_item.keep_rel_path)
+            keep_filename = os.path.basename(keep_full)
+        except Exception as e:
+            failed_items.append({
+                "rel_path": group_item.keep_rel_path,
+                "reason": getattr(e, "detail", str(e)),
+            })
+            continue
+
+        group_trashed_any = False
+        for t_rel in group_item.trash_rel_paths:
+            try:
+                trash_full = _resolve_safe_media_path(t_rel)
+                if os.path.normcase(trash_full) == os.path.normcase(keep_full):
+                    continue
+
+                trash_filename = os.path.basename(trash_full)
+                norm_trash_rel = normalize_rel_path(trash_full)
+
+                if request.merge_metadata:
+                    # 1. お気に入り状態の引き継ぎ
+                    with sqlite3.connect(DB_PATH) as conn:
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            "SELECT 1 FROM favorites WHERE filename = ?",
+                            (trash_filename,),
+                        )
+                        if cursor.fetchone() is not None:
+                            cursor.execute(
+                                "INSERT OR IGNORE INTO favorites (filename) VALUES (?)",
+                                (keep_filename,),
+                            )
+                            if cursor.rowcount > 0:
+                                inherited_favorites_count += 1
+                            conn.commit()
+
+                    # 2. NFOタグの引き継ぎ
+                    trash_tags = read_nfo_tags(trash_full)
+                    if trash_tags:
+                        merged_tags_total += merge_nfo_tags(trash_tags, keep_full)
+
+                # 3. ゴミ箱へ移動
+                rel_from_media = os.path.relpath(trash_full, MEDIA_DIR)
+                target_trash_path = os.path.join(TRASH_DIR, rel_from_media)
+                target_trash_dir = os.path.dirname(target_trash_path)
+                os.makedirs(target_trash_dir, exist_ok=True)
+
+                related_files = get_related_files(trash_full)
+                for f in related_files:
+                    src_file = str(f)
+                    dst_file = os.path.join(target_trash_dir, f.name)
+                    _safe_move_file(src_file, dst_file)
+                    logger.info(f"[DuplicateResolveBatch] Moved to trash: {src_file} -> {dst_file}")
+
+                # 4. キャッシュから除去
+                remove_cached_video_hash(norm_trash_rel, DB_PATH)
+                trashed_rel_paths.append(norm_trash_rel)
+                group_trashed_any = True
+            except Exception as e:
+                logger.error(f"[DuplicateResolveBatch] {t_rel} の削除に失敗: {e}")
+                failed_items.append({
+                    "rel_path": t_rel,
+                    "reason": getattr(e, "detail", str(e)),
+                })
+
+        if group_trashed_any:
+            resolved_groups += 1
+
+    return {
+        "status": "success",
+        "message": f"{resolved_groups}グループ（計{len(trashed_rel_paths)}本）をゴミ箱へ移動しました",
+        "resolved_groups": resolved_groups,
+        "trashed_count": len(trashed_rel_paths),
+        "trashed_rel_paths": trashed_rel_paths,
+        "inherited_favorites_count": inherited_favorites_count,
+        "merged_tags_count": merged_tags_total,
+        "failed": failed_items,
+    }
+
+
 # --- システムステータス API (クッキー有効期限 & ゴミ箱統計) ---
 from datetime import datetime
 

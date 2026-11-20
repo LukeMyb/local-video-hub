@@ -538,12 +538,12 @@ def find_duplicate_groups(
                 "tag_count": len(tags),
             })
 
-        # 解像度(画素数)が高い順 → ファイルサイズが大きい順 → お気に入り優先でソート
+        # 解像度(画素数)が高い順 → ファイルサイズが大きい順 → お気に入り優先 → タグ数順でソート
         videos_info.sort(
             key=lambda v: (
-                v["is_favorite"],
                 v["width"] * v["height"],
                 v["file_size"],
+                v["is_favorite"],
                 v["tag_count"],
             ),
             reverse=True,
