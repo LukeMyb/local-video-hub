@@ -1,5 +1,7 @@
-import { X, Sliders } from 'lucide-react';
+import { useState } from 'react';
+import { X, Sliders, RefreshCw, RotateCcw, Check } from 'lucide-react';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
+import { refreshLibrary } from '../../api/jellyfin';
 
 const SKIP_SECOND_OPTIONS = [5, 10, 15, 30];
 
@@ -8,7 +10,19 @@ const AFTER_ACTION_OPTIONS = [
   { value: 'next', label: '次の動画へ進む' },
 ];
 
-export function SettingsModal({ isOpen, onClose }) {
+const CACHE_LOCAL_STORAGE_KEYS = [
+  'jellyfin_searchQuery',
+  'jellyfin_isFavorite',
+  'jellyfin_libraryId',
+  'jellyfin_sortOrder',
+  'jellyfin_isShuffled',
+  'jellyfin_shuffleSeed',
+  'jellyfin_libraryHistory',
+  'jellyfin_gridColumnsByOrientation',
+  'jellyfin_gridColumns',
+];
+
+export function SettingsModal({ isOpen, onClose, onReloadVideos }) {
   const [skipSeconds, setSkipSeconds] = useLocalStorage('jellyfin_skipSeconds', 10);
   const [afterActionBehavior, setAfterActionBehavior] = useLocalStorage(
     'jellyfin_afterActionBehavior',
@@ -19,9 +33,59 @@ export function SettingsModal({ isOpen, onClose }) {
     false
   );
 
+  const [isScanningLibrary, setIsScanningLibrary] = useState(false);
+  const [scanResultMessage, setScanResultMessage] = useState(null);
+
   if (!isOpen) return null;
 
   const currentSkipSeconds = Number(skipSeconds) || 10;
+
+  const handleManualLibraryScan = async () => {
+    if (isScanningLibrary) return;
+    setIsScanningLibrary(true);
+    setScanResultMessage(null);
+    try {
+      await refreshLibrary();
+      // Jellyfin側のスキャン反映を少し待ってから動画一覧を再取得
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (onReloadVideos) {
+        await onReloadVideos();
+      }
+      setScanResultMessage({
+        type: 'success',
+        text: 'ライブラリスキャンを要求し、一覧を更新しました。',
+      });
+    } catch (error) {
+      console.error(error);
+      setScanResultMessage({
+        type: 'error',
+        text: error.message || 'ライブラリスキャンの要求に失敗しました。',
+      });
+    } finally {
+      setIsScanningLibrary(false);
+    }
+  };
+
+  const handleClearCache = async () => {
+    const confirmed = window.confirm(
+      '検索条件・フィルタ・列数・ライブラリ履歴・一時キャッシュをクリアして画面を再読み込みしますか？\n（※プレイヤー設定などのカスタマイズ項目は保持されます）'
+    );
+    if (!confirmed) return;
+
+    try {
+      window.sessionStorage.clear();
+      CACHE_LOCAL_STORAGE_KEYS.forEach((key) => {
+        window.localStorage.removeItem(key);
+      });
+      if ('caches' in window) {
+        const cacheNames = await window.caches.keys();
+        await Promise.all(cacheNames.map((name) => window.caches.delete(name)));
+      }
+    } catch (error) {
+      console.warn('キャッシュクリア中にエラーが発生しました:', error);
+    }
+    window.location.reload();
+  };
 
   return (
     <div
@@ -141,6 +205,75 @@ export function SettingsModal({ isOpen, onClose }) {
               <p className="text-xs text-zinc-500">
                 ONにすると、「すべての動画」の一覧およびランダム再生からゴミ箱内の動画を除外します（サイドバーからtrashを直接開いた時は表示されます）。
               </p>
+            </div>
+          </section>
+
+          {/* セクション: メンテナンス */}
+          <section className="space-y-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 border-b border-zinc-800 pb-1.5">
+              メンテナンス
+            </h3>
+
+            {/* 4. Jellyfin ライブラリスキャンの手動トリガー */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-zinc-200">
+                    Jellyfin ライブラリスキャン
+                  </p>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Jellyfinにファイルの再スキャンを要求し、動画一覧を再取得します。
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleManualLibraryScan}
+                  disabled={isScanningLibrary}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 shrink-0 transition-colors ${
+                    isScanningLibrary
+                      ? 'bg-blue-600/40 text-blue-200 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-500 text-white'
+                  }`}
+                >
+                  <RefreshCw
+                    size={14}
+                    className={isScanningLibrary ? 'animate-spin' : ''}
+                  />
+                  <span>{isScanningLibrary ? 'スキャン中...' : 'スキャン実行'}</span>
+                </button>
+              </div>
+              {scanResultMessage && (
+                <p
+                  className={`text-xs flex items-center gap-1 ${
+                    scanResultMessage.type === 'error'
+                      ? 'text-red-400'
+                      : 'text-emerald-400'
+                  }`}
+                >
+                  {scanResultMessage.type === 'success' && <Check size={14} />}
+                  <span>{scanResultMessage.text}</span>
+                </p>
+              )}
+            </div>
+
+            {/* 5. キャッシュクリア */}
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-zinc-200">
+                  キャッシュのクリア
+                </p>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  検索・フィルタ状態、列数、ライブラリ履歴、一時キャッシュをリセットして再読み込みします。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleClearCache}
+                className="px-3 py-1.5 rounded-md text-xs font-medium bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 hover:text-white flex items-center gap-1.5 shrink-0 transition-colors"
+              >
+                <RotateCcw size={14} />
+                <span>クリア</span>
+              </button>
             </div>
           </section>
         </div>

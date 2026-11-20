@@ -65,6 +65,7 @@ function Home() {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+        onReloadVideos={reloadVideos}
       />
 
       {/* SearchBar */}
