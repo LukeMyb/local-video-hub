@@ -14,6 +14,10 @@ export function SettingsModal({ isOpen, onClose }) {
     'jellyfin_afterActionBehavior',
     'home'
   );
+  const [excludeTrashInAll, setExcludeTrashInAll] = useLocalStorage(
+    'jellyfin_excludeTrashInAll',
+    false
+  );
 
   if (!isOpen) return null;
 
@@ -98,6 +102,44 @@ export function SettingsModal({ isOpen, onClose }) {
               </div>
               <p className="text-xs text-zinc-500">
                 「次の動画へ進む」を選ぶと、整理後に一覧へ戻らずプレイリストの次の動画を連続再生します。
+              </p>
+            </div>
+          </section>
+
+          {/* セクション: 一覧・表示設定 */}
+          <section className="space-y-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 border-b border-zinc-800 pb-1.5">
+              一覧・表示設定
+            </h3>
+
+            {/* 3. 「すべての動画」表示時のゴミ箱除外設定 */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-4">
+                <label
+                  htmlFor="setting-exclude-trash"
+                  className="text-sm font-medium text-zinc-200 cursor-pointer"
+                >
+                  「すべての動画」からゴミ箱（trash/）を除外
+                </label>
+                <button
+                  id="setting-exclude-trash"
+                  type="button"
+                  role="switch"
+                  aria-checked={!!excludeTrashInAll}
+                  onClick={() => setExcludeTrashInAll((prev) => !prev)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-600 ${
+                    excludeTrashInAll ? 'bg-blue-600' : 'bg-zinc-700'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      excludeTrashInAll ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+              <p className="text-xs text-zinc-500">
+                ONにすると、「すべての動画」の一覧およびランダム再生からゴミ箱内の動画を除外します（サイドバーからtrashを直接開いた時は表示されます）。
               </p>
             </div>
           </section>

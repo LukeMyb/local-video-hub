@@ -18,6 +18,7 @@ export function useVideos() {
   const [isShuffled, setIsShuffled] = useLocalStorage('jellyfin_isShuffled', false);
   const [shuffleSeed, setShuffleSeed] = useLocalStorage('jellyfin_shuffleSeed', 1);
   const [libraryHistory, setLibraryHistory] = useLocalStorage('jellyfin_libraryHistory', []);
+  const [excludeTrashInAll] = useLocalStorage('jellyfin_excludeTrashInAll', false);
 
   // UIの状態
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -219,23 +220,35 @@ export function useVideos() {
 
   // --- 計算ロジック ---
 
+  const isTrashVideo = useCallback((video) => {
+    return typeof video?.Path === 'string' && /[\\/]trash[\\/]/i.test(video.Path);
+  }, []);
+
   // サジェスト用タグリスト生成
   const allUniqueTags = useMemo(() => {
     if (!videos || videos.length === 0) return [];
     const tagSet = new Set();
     videos.forEach(video => {
+      if (selectedLibraryId === null && excludeTrashInAll && isTrashVideo(video)) {
+        return;
+      }
       if (video.Tags && video.Tags.length > 0) {
         video.Tags.forEach(tag => tagSet.add(tag.replace(/ /g, '_')));
       }
     });
     return Array.from(tagSet).sort((a, b) => a.localeCompare(b));
-  }, [videos]);
+  }, [videos, selectedLibraryId, excludeTrashInAll, isTrashVideo]);
 
   // フィルタリングとソートの適用
   const { allFiltered, displayed } = useMemo(() => {
     if (!videos) return { allFiltered: [], displayed: [] };
     
     let filtered = [...videos];
+
+    // 「すべての動画」表示時にゴミ箱（trash/）を除外する設定がONの場合
+    if (selectedLibraryId === null && excludeTrashInAll) {
+      filtered = filtered.filter(video => !isTrashVideo(video));
+    }
 
     // 直近で移動・論理削除・復元した動画を一時的に非表示にする（15秒間）
     const hiddenMap = JSON.parse(sessionStorage.getItem('jellyfin_hidden_ids') || '{}');
@@ -288,7 +301,7 @@ export function useVideos() {
       allFiltered: filtered,
       displayed: filtered.slice(0, displayCount)
     };
-  }, [videos, sortOrder, isShuffled, shuffleSeed, isFavoriteFilter, displayCount, searchQuery]);
+  }, [videos, selectedLibraryId, excludeTrashInAll, isTrashVideo, sortOrder, isShuffled, shuffleSeed, isFavoriteFilter, displayCount, searchQuery]);
 
   // --- イベントハンドラ ---
 
