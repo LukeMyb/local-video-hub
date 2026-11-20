@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+
+const LOCAL_STORAGE_SYNC_EVENT = 'local-storage-sync';
 
 // ローカルストレージの値とReactのStateを同期させるカスタムフック
 export function useLocalStorage(key, initialValue) {
@@ -14,16 +16,47 @@ export function useLocalStorage(key, initialValue) {
   });
 
   // 状態とローカルストレージの双方を同時に更新する関数
-  const setValue = (value) => {
+  const setValue = useCallback((value) => {
     try {
-      // コールバック関数による更新（prev => next の形式）もサポートするための判定
-      const valueToStore = value instanceof Function ? value(storedValue) : value;
-      setStoredValue(valueToStore);
-      window.localStorage.setItem(key, JSON.stringify(valueToStore));
+      setStoredValue((prev) => {
+        const valueToStore = value instanceof Function ? value(prev) : value;
+        window.localStorage.setItem(key, JSON.stringify(valueToStore));
+        window.dispatchEvent(
+          new CustomEvent(LOCAL_STORAGE_SYNC_EVENT, {
+            detail: { key, newValue: valueToStore },
+          })
+        );
+        return valueToStore;
+      });
     } catch (error) {
       console.warn("ローカルストレージの保存エラー:", error);
     }
-  };
+  }, [key]);
+
+  // 同一タブ内の別コンポーネントや別タブからの更新を同期
+  useEffect(() => {
+    const handleCustomSync = (e) => {
+      if (e.detail?.key === key) {
+        setStoredValue(e.detail.newValue);
+      }
+    };
+    const handleStorageChange = (e) => {
+      if (e.key === key) {
+        try {
+          setStoredValue(e.newValue !== null ? JSON.parse(e.newValue) : initialValue);
+        } catch (error) {
+          console.warn("ローカルストレージの同期エラー:", error);
+        }
+      }
+    };
+
+    window.addEventListener(LOCAL_STORAGE_SYNC_EVENT, handleCustomSync);
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener(LOCAL_STORAGE_SYNC_EVENT, handleCustomSync);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [key, initialValue]);
 
   return [storedValue, setValue];
 }

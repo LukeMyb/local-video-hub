@@ -23,6 +23,7 @@ export function Controls({
   onSeek,
   onSkipBackward,
   onSkipForward,
+  skipSeconds = 10,
   onPrev,
   onNext,
   onToggleFavorite,
@@ -190,11 +191,11 @@ export function Controls({
       <div className="flex items-center justify-between mt-2">
         {/* 左側の再生コントロール群 */}
         <div className="flex items-center gap-6 sm:gap-8">
-          {/* 10秒戻る */}
+          {/* 指定秒数戻る */}
           <button
             onClick={onSkipBackward}
             className="text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
-            title="10秒戻る"
+            title={`${skipSeconds}秒戻る`}
           >
             <Rewind size={28} className="fill-current" strokeWidth={0} />
           </button>
@@ -212,11 +213,11 @@ export function Controls({
             )}
           </button>
 
-          {/* 10秒進む */}
+          {/* 指定秒数進む */}
           <button
             onClick={onSkipForward}
             className="text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
-            title="10秒進む"
+            title={`${skipSeconds}秒進む`}
           >
             <FastForward size={28} className="fill-current" strokeWidth={0} />
           </button>

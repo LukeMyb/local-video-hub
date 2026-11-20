@@ -43,6 +43,7 @@ function Player() {
     togglePlay,
     skipBackward,
     skipForward,
+    skipSeconds,
     handleSeek,
     handleVideoClick,
     handlePlay,
@@ -244,6 +245,7 @@ function Player() {
         onSeek={handleSeek}
         onSkipBackward={skipBackward}
         onSkipForward={skipForward}
+        skipSeconds={skipSeconds}
         onPrev={handlePrev}
         onNext={handleNext}
         onToggleFavorite={handleToggleFavorite}

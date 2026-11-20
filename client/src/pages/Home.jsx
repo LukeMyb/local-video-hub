@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Sidebar } from '../components/common/Sidebar';
+import { SettingsModal } from '../components/common/SettingsModal';
 import { SearchBar } from '../components/home/SearchBar';
 import { VideoGrid } from '../components/home/VideoGrid';
 import { ControlBar } from '../components/home/ControlBar';
@@ -8,6 +10,8 @@ import { useSwipe } from '../hooks/useSwipe';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 
 function Home() {
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
   const {
     loading,
     libraries,
@@ -57,9 +61,16 @@ function Home() {
         onSelectLibrary={setSelectedLibraryId}
       />
 
+      {/* SettingsModal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
+
       {/* SearchBar */}
       <SearchBar 
         onOpenMenu={() => setIsDrawerOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         searchQuery={searchQuery}
         onSearch={handleSearch}
         tags={allUniqueTags}

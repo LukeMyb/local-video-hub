@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Search as SearchIcon, Heart, Ellipsis, Copy, X } from 'lucide-react';
+import { Menu, Search as SearchIcon, Heart, Ellipsis, Copy, Settings, X } from 'lucide-react';
 
 export function SearchBar({
   onOpenMenu,
+  onOpenSettings,
   searchQuery,
   onSearch,
   tags, // サジェスト候補の元となる全タグリスト
@@ -214,6 +215,17 @@ export function SearchBar({
               >
                 <Copy size={17} className="shrink-0" />
                 <span>重複動画の確認</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMoreMenuOpen(false);
+                  if (onOpenSettings) onOpenSettings();
+                }}
+                className="w-full px-4 py-2.5 text-sm text-zinc-200 hover:text-white hover:bg-zinc-800/80 transition-colors flex items-center gap-3 text-left"
+              >
+                <Settings size={17} className="shrink-0" />
+                <span>設定</span>
               </button>
             </div>
           )}

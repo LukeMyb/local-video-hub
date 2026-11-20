@@ -34,6 +34,9 @@ export function useVideoPlayer(id) {
 
   const [isLoop, setIsLoop] = useLocalStorage('jellyfin_isLoop', false);
   const [libraryHistory] = useLocalStorage('jellyfin_libraryHistory', []);
+  const [rawSkipSeconds] = useLocalStorage('jellyfin_skipSeconds', 10);
+  const [afterActionBehavior] = useLocalStorage('jellyfin_afterActionBehavior', 'home');
+  const skipSeconds = Number(rawSkipSeconds) || 10;
   const [isMobile, setIsMobile] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
@@ -218,6 +221,28 @@ export function useVideoPlayer(id) {
     setIsInfoModalOpen(false);
   }, []);
 
+  const navigateAfterVideoAction = useCallback(() => {
+    if (afterActionBehavior === 'next' && playlist.length > 1 && currentIndex !== -1) {
+      const updatedPlaylist = playlist.filter((video) => video.Id !== id);
+      const nextTarget =
+        currentIndex < updatedPlaylist.length
+          ? updatedPlaylist[currentIndex]
+          : updatedPlaylist[updatedPlaylist.length - 1];
+      if (nextTarget) {
+        setIsMoveModalOpen(false);
+        setIsInfoModalOpen(false);
+        resetZoom();
+        resetFineSeek();
+        navigate(`/player/${nextTarget.Id}`, {
+          state: { playlist: updatedPlaylist },
+          replace: true,
+        });
+        return;
+      }
+    }
+    navigate('/');
+  }, [afterActionBehavior, playlist, currentIndex, id, resetZoom, resetFineSeek, navigate]);
+
   const handleMoveVideo = useCallback(
     async (targetLibraryName) => {
       if (!fullVideoInfo?.Path || !targetLibraryName) return;
@@ -234,13 +259,13 @@ export function useVideoPlayer(id) {
         // ホーム画面での動画再取得を1.5秒遅延させるフラグを立てる
         sessionStorage.setItem('jellyfin_delay_fetch', 'true');
         alert(`「${targetLibraryName}」に移動しました。`);
-        navigate('/');
+        navigateAfterVideoAction();
       } catch (error) {
         console.error(error);
         alert(`エラー: ${error.message}`);
       }
     },
-    [fullVideoInfo, hideVideoLocally, navigate]
+    [fullVideoInfo, hideVideoLocally, navigateAfterVideoAction]
   );
 
   const handleTrashVideo = useCallback(async () => {
@@ -257,12 +282,12 @@ export function useVideoPlayer(id) {
       // ホーム画面での動画再取得を1.5秒遅延させるフラグを立てる
       sessionStorage.setItem('jellyfin_delay_fetch', 'true');
       alert('ゴミ箱に移動しました。');
-      navigate('/');
+      navigateAfterVideoAction();
     } catch (error) {
       console.error(error);
       alert(`エラー: ${error.message}`);
     }
-  }, [isFavorite, fullVideoInfo, hideVideoLocally, navigate]);
+  }, [isFavorite, fullVideoInfo, hideVideoLocally, navigateAfterVideoAction]);
 
   const handleRestoreVideo = useCallback(async () => {
     if (!fullVideoInfo?.Path) return;
@@ -278,12 +303,12 @@ export function useVideoPlayer(id) {
       // ホーム画面での動画再取得を1.5秒遅延させるフラグを立てる
       sessionStorage.setItem('jellyfin_delay_fetch', 'true');
       alert('復元しました。');
-      navigate('/');
+      navigateAfterVideoAction();
     } catch (error) {
       console.error(error);
       alert(`エラー: ${error.message}`);
     }
-  }, [fullVideoInfo, hideVideoLocally, navigate]);
+  }, [fullVideoInfo, hideVideoLocally, navigateAfterVideoAction]);
 
   useEffect(() => {
     const handleActivity = () => resetControlsTimeout();
@@ -382,19 +407,19 @@ export function useVideoPlayer(id) {
 
   const skipBackward = useCallback(() => {
     if (videoRef.current) {
-      const newTime = Math.max(0, videoRef.current.currentTime - 10);
+      const newTime = Math.max(0, videoRef.current.currentTime - skipSeconds);
       videoRef.current.currentTime = newTime;
       setCurrentTime(newTime);
     }
-  }, []);
+  }, [skipSeconds]);
 
   const skipForward = useCallback(() => {
     if (videoRef.current) {
-      const newTime = Math.min(duration, videoRef.current.currentTime + 10);
+      const newTime = Math.min(duration, videoRef.current.currentTime + skipSeconds);
       videoRef.current.currentTime = newTime;
       setCurrentTime(newTime);
     }
-  }, [duration]);
+  }, [duration, skipSeconds]);
 
   const handleSeek = useCallback(
     (e) => {
@@ -502,6 +527,7 @@ export function useVideoPlayer(id) {
     togglePlay,
     skipBackward,
     skipForward,
+    skipSeconds,
     handleSeek,
     handleVideoClick,
     handlePlay,
