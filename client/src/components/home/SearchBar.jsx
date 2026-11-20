@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Search as SearchIcon, Heart, Ellipsis, Copy, Settings, X } from 'lucide-react';
+import { Menu, Search as SearchIcon, Heart, Ellipsis, Copy, Activity, Settings, X } from 'lucide-react';
 
 export function SearchBar({
   onOpenMenu,
+  onOpenSystemStatus,
   onOpenSettings,
   searchQuery,
   onSearch,
@@ -204,7 +205,7 @@ export function SearchBar({
           </button>
 
           {isMoreMenuOpen && (
-            <div className="absolute right-0 top-full mt-2 w-48 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 rounded-xl shadow-2xl py-1.5 z-50 overflow-hidden">
+            <div className="absolute right-0 top-full mt-2 w-60 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 rounded-xl shadow-2xl py-1.5 z-50 overflow-hidden">
               <button
                 type="button"
                 onClick={() => {
@@ -215,6 +216,17 @@ export function SearchBar({
               >
                 <Copy size={17} className="shrink-0" />
                 <span>重複動画の確認</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMoreMenuOpen(false);
+                  if (onOpenSystemStatus) onOpenSystemStatus();
+                }}
+                className="w-full px-4 py-2.5 text-sm text-zinc-200 hover:text-white hover:bg-zinc-800/80 transition-colors flex items-center gap-3 text-left"
+              >
+                <Activity size={17} className="shrink-0" />
+                <span>システム状態・メンテナンス</span>
               </button>
               <button
                 type="button"

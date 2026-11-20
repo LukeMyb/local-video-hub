@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Sidebar } from '../components/common/Sidebar';
 import { SettingsModal } from '../components/common/SettingsModal';
+import { SystemStatusModal } from '../components/common/SystemStatusModal';
 import { SearchBar } from '../components/home/SearchBar';
 import { VideoGrid } from '../components/home/VideoGrid';
 import { ControlBar } from '../components/home/ControlBar';
@@ -11,6 +12,7 @@ import { usePullToRefresh } from '../hooks/usePullToRefresh';
 
 function Home() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSystemStatusOpen, setIsSystemStatusOpen] = useState(false);
 
   const {
     loading,
@@ -36,17 +38,17 @@ function Home() {
     scrollToTopBtnRef
   } = useVideos();
 
-  // 右スワイプ時にサイドバー(Drawer)を開く処理を設定（設定モーダル表示中は無効化）
+  // 右スワイプ時にサイドバー(Drawer)を開く処理を設定（モーダル表示中は無効化）
   const swipeHandlers = useSwipe({
     onSwipeRight: () => {
-      if (!isSettingsOpen) setIsDrawerOpen(true);
+      if (!isSettingsOpen && !isSystemStatusOpen) setIsDrawerOpen(true);
     }
   });
 
   // 一番上で更に上へスクロール（引っ張り / ホイール上回転）した時にグリッドを再読み込み
   const { pullDistance, isThresholdReached } = usePullToRefresh({
     onRefresh: reloadVideos,
-    disabled: loading || isDrawerOpen || isSettingsOpen
+    disabled: loading || isDrawerOpen || isSettingsOpen || isSystemStatusOpen
   });
 
   return (
@@ -67,12 +69,19 @@ function Home() {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+      />
+
+      {/* SystemStatusModal */}
+      <SystemStatusModal
+        isOpen={isSystemStatusOpen}
+        onClose={() => setIsSystemStatusOpen(false)}
         onReloadVideos={reloadVideos}
       />
 
       {/* SearchBar */}
       <SearchBar 
         onOpenMenu={() => setIsDrawerOpen(true)}
+        onOpenSystemStatus={() => setIsSystemStatusOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         searchQuery={searchQuery}
         onSearch={handleSearch}
