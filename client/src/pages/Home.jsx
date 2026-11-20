@@ -36,15 +36,17 @@ function Home() {
     scrollToTopBtnRef
   } = useVideos();
 
-  // 右スワイプ時にサイドバー(Drawer)を開く処理を設定
+  // 右スワイプ時にサイドバー(Drawer)を開く処理を設定（設定モーダル表示中は無効化）
   const swipeHandlers = useSwipe({
-    onSwipeRight: () => setIsDrawerOpen(true)
+    onSwipeRight: () => {
+      if (!isSettingsOpen) setIsDrawerOpen(true);
+    }
   });
 
   // 一番上で更に上へスクロール（引っ張り / ホイール上回転）した時にグリッドを再読み込み
   const { pullDistance, isThresholdReached } = usePullToRefresh({
     onRefresh: reloadVideos,
-    disabled: loading || isDrawerOpen
+    disabled: loading || isDrawerOpen || isSettingsOpen
   });
 
   return (
