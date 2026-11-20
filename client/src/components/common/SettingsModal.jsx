@@ -1,7 +1,16 @@
-import { useState } from 'react';
-import { X, Sliders, RefreshCw, RotateCcw, Check } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  X,
+  Sliders,
+  RefreshCw,
+  RotateCcw,
+  Check,
+  KeyRound,
+  Trash2,
+} from 'lucide-react';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { refreshLibrary } from '../../api/jellyfin';
+import { getSystemStatus } from '../../api/backend';
 
 const SKIP_SECOND_OPTIONS = [5, 10, 15, 30];
 
@@ -22,6 +31,70 @@ const CACHE_LOCAL_STORAGE_KEYS = [
   'jellyfin_gridColumns',
 ];
 
+function formatBytes(bytes) {
+  if (!bytes || bytes <= 0) return '0 MB';
+  const gb = bytes / (1024 * 1024 * 1024);
+  if (gb >= 1) {
+    return `${gb.toFixed(2)} GB`;
+  }
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 0.1) {
+    return `${mb.toFixed(1)} MB`;
+  }
+  const kb = bytes / 1024;
+  return `${kb.toFixed(1)} KB`;
+}
+
+function CookieStatusRow({ label, cookieInfo }) {
+  if (!cookieInfo) {
+    return (
+      <div className="flex items-center justify-between text-xs text-zinc-400 py-1">
+        <span>{label}</span>
+        <span>取得中...</span>
+      </div>
+    );
+  }
+
+  const isValid = !!cookieInfo.is_valid;
+  const isWarning = isValid && typeof cookieInfo.days_remaining === 'number' && cookieInfo.days_remaining <= 7;
+
+  const badgeClass = !isValid
+    ? 'bg-red-500/15 text-red-400 border-red-500/30'
+    : isWarning
+      ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+      : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
+
+  return (
+    <div className="p-2.5 rounded-lg bg-zinc-800/60 border border-zinc-800 flex items-center justify-between gap-2">
+      <div className="min-w-0">
+        <div className="flex items-center gap-1.5">
+          <KeyRound size={14} className="text-zinc-400 shrink-0" />
+          <span className="text-xs font-medium text-zinc-200">{label}</span>
+        </div>
+        <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
+          {cookieInfo.expires_at ? (
+            <>
+              期限: <span className="font-mono text-zinc-300">{cookieInfo.expires_at}</span>
+              {typeof cookieInfo.days_remaining === 'number' && (
+                <span className="ml-1">
+                  ({cookieInfo.days_remaining >= 0 ? `残り${cookieInfo.days_remaining}日` : '期限切れ'})
+                </span>
+              )}
+            </>
+          ) : (
+            cookieInfo.message
+          )}
+        </p>
+      </div>
+      <span
+        className={`px-2 py-0.5 text-[11px] font-medium rounded-full border shrink-0 ${badgeClass}`}
+      >
+        {isValid ? '有効' : cookieInfo.status === 'expired' ? '期限切れ' : '無効/未配置'}
+      </span>
+    </div>
+  );
+}
+
 export function SettingsModal({ isOpen, onClose, onReloadVideos }) {
   const [skipSeconds, setSkipSeconds] = useLocalStorage('jellyfin_skipSeconds', 10);
   const [afterActionBehavior, setAfterActionBehavior] = useLocalStorage(
@@ -35,6 +108,30 @@ export function SettingsModal({ isOpen, onClose, onReloadVideos }) {
 
   const [isScanningLibrary, setIsScanningLibrary] = useState(false);
   const [scanResultMessage, setScanResultMessage] = useState(null);
+
+  const [systemStatus, setSystemStatus] = useState(null);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(false);
+  const [statusError, setStatusError] = useState(null);
+
+  const fetchSystemStatus = useCallback(async () => {
+    setIsLoadingStatus(true);
+    setStatusError(null);
+    try {
+      const data = await getSystemStatus();
+      setSystemStatus(data);
+    } catch (error) {
+      console.error(error);
+      setStatusError(error.message || 'システム状態の取得に失敗しました');
+    } finally {
+      setIsLoadingStatus(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchSystemStatus();
+    }
+  }, [isOpen, fetchSystemStatus]);
 
   if (!isOpen) return null;
 
@@ -274,6 +371,68 @@ export function SettingsModal({ isOpen, onClose, onReloadVideos }) {
                 <RotateCcw size={14} />
                 <span>クリア</span>
               </button>
+            </div>
+          </section>
+
+          {/* セクション: システム状態 */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-1.5">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                システム状態
+              </h3>
+              <button
+                type="button"
+                onClick={fetchSystemStatus}
+                disabled={isLoadingStatus}
+                className="text-xs text-zinc-400 hover:text-zinc-200 flex items-center gap-1 transition-colors"
+                title="ステータスを再取得"
+              >
+                <RefreshCw
+                  size={12}
+                  className={isLoadingStatus ? 'animate-spin' : ''}
+                />
+                <span>更新</span>
+              </button>
+            </div>
+
+            {statusError && (
+              <p className="text-xs text-red-400 bg-red-950/40 border border-red-800/60 rounded-lg p-2.5">
+                {statusError}
+              </p>
+            )}
+
+            {/* 6. X / TikTok クッキーの有効期限ステータス表示 */}
+            <div className="space-y-2">
+              <CookieStatusRow
+                label="X (Twitter) Cookie"
+                cookieInfo={systemStatus?.cookies?.x}
+              />
+              <CookieStatusRow
+                label="TikTok Cookie"
+                cookieInfo={systemStatus?.cookies?.tiktok}
+              />
+            </div>
+
+            {/* 7. ゴミ箱（media/trash）内のファイル数・合計容量の表示 */}
+            <div className="p-2.5 rounded-lg bg-zinc-800/60 border border-zinc-800 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Trash2 size={15} className="text-zinc-400 shrink-0" />
+                <div>
+                  <p className="text-xs font-medium text-zinc-200">
+                    ゴミ箱（media/trash）
+                  </p>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    {systemStatus?.trash
+                      ? `動画 ${systemStatus.trash.video_count} 本（関連含む計 ${systemStatus.trash.total_file_count} ファイル）`
+                      : '集計中...'}
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs font-mono font-semibold text-zinc-200 shrink-0">
+                {systemStatus?.trash
+                  ? formatBytes(systemStatus.trash.total_bytes)
+                  : '-'}
+              </span>
             </div>
           </section>
         </div>

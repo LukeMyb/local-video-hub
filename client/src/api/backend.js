@@ -161,3 +161,12 @@ export const resolveDuplicate = async ({
 
   return response.json();
 };
+
+export const getSystemStatus = async () => {
+  const response = await fetch(`${BACKEND_URL}/api/system/status`);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'システム情報の取得に失敗しました');
+  }
+  return response.json();
+};

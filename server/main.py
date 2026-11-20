@@ -705,3 +705,122 @@ async def resolve_duplicate(request: DuplicateResolveRequest):
         "inherited_favorite": inherited_favorite,
         "merged_tags_count": merged_tags_total,
     }
+
+
+# --- システムステータス API (クッキー有効期限 & ゴミ箱統計) ---
+from datetime import datetime
+
+VIDEO_EXTENSIONS = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v", ".ts", ".flv", ".wmv"}
+
+
+def inspect_cookie_status(cookie_file: str, target_domains: tuple[str, ...], cookie_name: str):
+    """クッキーファイルの有効性・有効期限日時・残り日数を詳細に取得する"""
+    if not os.path.exists(cookie_file):
+        return {
+            "is_valid": False,
+            "status": "missing",
+            "message": "クッキーファイルが未配置です",
+            "expires_at": None,
+            "days_remaining": None,
+        }
+
+    try:
+        with open(cookie_file, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("#") or not line.strip():
+                    continue
+                parts = line.strip().split("\t")
+                if len(parts) >= 7:
+                    domain, _, _, _, expiry, name, _ = parts
+                    if any(d in domain for d in target_domains) and name == cookie_name:
+                        try:
+                            exp_ts = int(expiry)
+                        except ValueError:
+                            exp_ts = 0
+
+                        if exp_ts > 0:
+                            expires_at = datetime.fromtimestamp(exp_ts).strftime("%Y-%m-%d %H:%M")
+                            diff_sec = exp_ts - time.time()
+                            days_remaining = int(diff_sec // 86400)
+                            if diff_sec < 0:
+                                return {
+                                    "is_valid": False,
+                                    "status": "expired",
+                                    "message": "有効期限切れ",
+                                    "expires_at": expires_at,
+                                    "days_remaining": days_remaining,
+                                }
+                            return {
+                                "is_valid": True,
+                                "status": "valid",
+                                "message": "有効",
+                                "expires_at": expires_at,
+                                "days_remaining": days_remaining,
+                            }
+                        return {
+                            "is_valid": True,
+                            "status": "valid",
+                            "message": "有効 (セッション)",
+                            "expires_at": None,
+                            "days_remaining": None,
+                        }
+    except Exception as e:
+        return {
+            "is_valid": False,
+            "status": "error",
+            "message": f"読み込みエラー: {e}",
+            "expires_at": None,
+            "days_remaining": None,
+        }
+
+    return {
+        "is_valid": False,
+        "status": "invalid",
+        "message": f"認証クッキー({cookie_name})が見つかりません",
+        "expires_at": None,
+        "days_remaining": None,
+    }
+
+
+def get_trash_stats(trash_dir: str):
+    """media/trash 配下の動画ファイル数・総ファイル数・合計容量を集計する"""
+    video_count = 0
+    total_file_count = 0
+    total_bytes = 0
+
+    if os.path.isdir(trash_dir):
+        for root, _, files in os.walk(trash_dir):
+            for fname in files:
+                fpath = os.path.join(root, fname)
+                try:
+                    if os.path.isfile(fpath):
+                        total_file_count += 1
+                        total_bytes += os.path.getsize(fpath)
+                        ext = os.path.splitext(fname)[1].lower()
+                        if ext in VIDEO_EXTENSIONS:
+                            video_count += 1
+                except OSError:
+                    pass
+
+    return {
+        "video_count": video_count,
+        "total_file_count": total_file_count,
+        "total_bytes": total_bytes,
+    }
+
+
+@app.get("/api/system/status")
+async def get_system_status():
+    x_cookie = inspect_cookie_status(COOKIE_FILE, ("x.com", "twitter.com"), "auth_token")
+    tiktok_cookie = inspect_cookie_status(TIKTOK_COOKIE_FILE, ("tiktok.com",), "sessionid")
+    trash_stats = get_trash_stats(TRASH_DIR)
+
+    return {
+        "status": "success",
+        "cookies": {
+            "x": x_cookie,
+            "tiktok": tiktok_cookie,
+        },
+        "trash": trash_stats,
+    }
+
