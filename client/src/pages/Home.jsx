@@ -45,7 +45,7 @@ function Home() {
     }
   });
 
-  // 一番上で更に上へスクロール（引っ張り / ホイール上回転）した時にグリッドを再読み込み
+  // 一番上で下へ引っ張った時にグリッドを再読み込み
   const { pullDistance, isThresholdReached } = usePullToRefresh({
     onRefresh: reloadVideos,
     disabled: loading || isDrawerOpen || isSettingsOpen || isSystemStatusOpen
